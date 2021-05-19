@@ -177,15 +177,13 @@ class Element(object):
         raise NotImplementedError("Not implemented yet")
 
 class Pillules(Element):
+    def __init__(self,name,abbvr=None,usage=None,transparent=True, valeur_pillule=0):
+        Equipment.__init__(self,name,abbvr,usage,transparent)
+        self.valeur_pillule=valeur_pillule
 
-    def __init__(self,name,abbvr=None,transparent=False,bourse=0):
-        Element.__init__(self,name,abbvr,transparent)
-        self.bourse=bourse
-
-    def meet(self,hero) -> True:
+    def meet(self, creature : Creature):
         theGame().addMessage(f"You pick up a {self.name}")
-        theGame().floor.rm(self)
-        theGame().hero.bourse+=self.bourse
+        creature.bourse+=self.valeur_pillule
         return True
 
 class Creature(Element):
@@ -652,10 +650,10 @@ class Game(object):
     monsters = { 0: [ Creature("Goblin",4), Creature("Bat",2,"W") ],
                  1: [ Creature("Ork",6,strength=2), Creature("Blob",10) ],
                  5: [ Creature("Dragon",20,strength=3) ] }
-    equipments = { 0: [ Equipment("potion","!",usage=lambda creature : heal(creature)) ,Pillules("or=1","b")],
-                   1: [ Equipment("sword","s"), Equipment("arc"),Equipment("potion","!",usage= lambda creature : teleport(creature,True)) ,Pillules("or=2","j")],
-                   2: [ Equipment("chainmail"), Pillules("or=5","p") ],
-                   3: [ Equipment("portoloin","w",usage= lambda creature : teleport(creature,False)), Pillules("or=10","J")]}
+    equipments = { 0: [ Equipment("potion","!",usage=lambda creature : heal(creature)),Pillules("or1","b",valeur_pillule=1)],
+                   1: [ Equipment("sword","s"), Equipment("arc"),Equipment("potion","!",usage= lambda creature : teleport(creature,True)) ,Pillules("or2","j",valeur_pillule=2)],
+                   2: [ Equipment("chainmail"), Pillules("or5","p",valeur_pillule=5) ],
+                   3: [ Equipment("portoloin","w",usage= lambda creature : teleport(creature,False)), Pillules("or10","J", valeur_pillule=10)]}
     def __init__(self,hero=None,level=1,sizemap=20):
         self.hero=Hero()
         if hero!=None:
