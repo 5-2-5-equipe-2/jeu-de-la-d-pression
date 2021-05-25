@@ -417,7 +417,7 @@ class Map(object):
             c = self.pos(e)
             if isinstance(e, Creature) and e != self.hero and c.distance(h) < 6:
                   d = c.direction(h)
-                  if self.get(c + d) in [Map.listground, self.hero]:
+                  if self.get(c + d) in Map.listground or self.get(c+d) == self.hero:
                      self.move(e, d)
                   elif (isinstance(self.get(c+d),Utilise)):
                         self.move(e,d)
