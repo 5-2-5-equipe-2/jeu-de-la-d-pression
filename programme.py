@@ -156,6 +156,13 @@ class Coord(object):
     def middle(self,other):
         return (self+other)//2
 
+class Status(object):
+    def __init__(self,name,effect,cible="hp",prb=1):
+        self.name=name
+        self.cible=cible
+        self.effect=effect
+        self.prb=prb
+
 class Element(object):
     "Élement de base pour la construction du roquelike"
 
@@ -176,6 +183,42 @@ class Element(object):
     def meet(self,hero):
         raise NotImplementedError("Not implemented yet")
 
+class Creature(Element):
+    "Élement possédant des pv et une force, pouvant se déplacer dans une Map"
+    def __init__(self,name,hp,abbrv=None,strength=1,inventory=[],equips=[None,None,None,None],bourse=0,vitesse=1):
+        Element.__init__(self,name,abbrv)
+        self.hp=hp
+        self.strength=strength
+        self.bourse=bourse
+        self._inventory=inventory
+        self.equips=equips
+        self.listeffects=[]
+        self.dpl=[]
+        self.vitesse=vitesse
+
+    def description(self) -> str:
+        return Element.description(self)+"({})".format(self.hp)
+
+    def meet(self,other) -> bool:
+        self.hp-=other.strength
+        theGame().addMessage(f"The {other.name} hits the {self.description()}")
+        return False if self.hp>0 else True
+
+    def statuslose(self,status : Status):
+        if status.cible in self.__dict__:
+            if random.random<status.prb:
+                self.__setitem__(status.cible,self.__getitem__(status.cible)+status.effect)
+
+    def creaturn(self):
+        #if len(self.dpl)==0:
+            #recalculer l'itinéraire
+            #print("jesépakoifer")
+        #theGame().floor.move(self,self.dpl[0])
+        #self.dpl.pop(0)
+        for status in self.listeffects:
+            if not(status.permanent):
+                self.statuslose(status)
+
 class Pillules(Element):
     def __init__(self,name,abbvr=None,usage=None,transparent=True, valeur_pillule=0):
         Equipment.__init__(self,name,abbvr,usage,transparent)
@@ -186,29 +229,13 @@ class Pillules(Element):
         creature.bourse+=self.valeur_pillule
         return True
 
-class Creature(Element):
-    "Élement possédant des pv et une force, pouvant se déplacer"
-
-    def __init__(self,name,hp,abbrv=None,strength=1):
-        Element.__init__(self,name,abbrv)
-        self.hp=hp
-        self.strength=strength
-
-    def description(self) -> str:
-        return Element.description(self)+"({})".format(self.hp)
-
-    def meet(self,other) -> bool:
-        self.hp-=other.strength
-        theGame().addMessage(f"The {other.name} hits the {self.description()}")
-        return False if self.hp>0 else True
-
 class Equipment(Element):
     "Élément ramassable et équipable par le héros"
 
-    def __init__(self,name,abbvr=None,usage=None,transparent=False,bourse=0):
-        Element.__init__(self,name,abbvr)
+    def __init__(self,name,abbvr=None,usage=None,transparent=False,bourse=0,enchant=[]):
+        Element.__init__(self,name,abbvr,transparent)
         self.usage=usage
-        self.transparent=transparent
+        self.enchant=enchant
 
     def meet(self,hero) -> True:
         theGame().addMessage(f"You pick up a {self.name}")
@@ -221,16 +248,27 @@ class Equipment(Element):
         theGame().addMessage(f"The {self.name} is not usable")
         return False
 
+class Enchant(object):
+    def __init__(self,name="+",effect=None,increase=[("force",1)]):
+        self.name=name
+        self.effect=effect
+        self.increase=increase
+    def appy(self,equip : Equipment):
+        equip.name+=" "+self.name
+        for i in self.increase:
+            equip.__setitem__(i[0],i[1]+equip.__getitem__(i[0]))
+            if self.effect!=None:
+                equip.enchant.append(self.effect)
+
 class Hero(Creature):
     "Le héros, controllé par le joueur"
-
-    def __init__(self, name="Hero", hp=10, abbrv="@", archer=None, strength=2,joie=50,tristesse=50,colere=50, peur=50, xp=0, bourse=0):
+    def __init__(self, name="Hero", hp=370, abbrv="@", strength=2):
         Creature.__init__(self,name,hp,abbrv,strength)
-        self._inventory=[]
-        self.joie=joie
-        self.tristesse=tristesse
-        self.colere=colere
-        self.bourse=bourse
+        self.joie=50
+        self.tristesse=50
+        self.colere=50
+        self.peur=50
+        self.xp=0
 
     def take(self,equip)-> True:
         if isinstance(equip,Equipment):
@@ -239,7 +277,7 @@ class Hero(Creature):
         raise TypeError
 
     def description(self) -> str:
-        return Creature.description(self)+"{}".format(self._inventory)
+        return Creature.description(self)+"{} ${}".format(self._inventory,self.bourse)
 
     def __repr__(self) -> str:
         return self.abbrv
@@ -257,7 +295,7 @@ class Hero(Creature):
         self.hp=0
 
     def use(self,item : Equipment) -> None:
-        if not(type(item) is Equipment):
+        if not(isinstance(item,Equipment)):
             raise TypeError("C'est pas un équipement!")
         if not(item in self._inventory):
             raise ValueError("Tu l'as pas, tu peux pas l'utiliser!")
@@ -273,10 +311,18 @@ class Arme(Equipment):
         self.durabilite=durabilite
 
     def equiper(self,creature : Creature) -> None:
+        if creature.equips[0]!=None:
+            creature.equips[0].desequiper(creature)
         creature.strength+=self.force
+        creature.equips[0]=self
 
     def desequiper(self,creature : Creature) -> None:
+        creature.equips[0]=None
         creature.strength-=self.force
+
+    def use(self,creature : Creature) -> True:
+        self.equiper(creature)
+        return True
 
 class Armure(Equipment):
 
@@ -287,21 +333,18 @@ class Armure(Equipment):
         self.durabilite=durabilite
 
     def equiper(self,creature : Creature) -> None:
+        if creature.equips[0]!=None:
+            creature.equips[1].desequiper(creature)
         creature.hp+=self.defense
+        creature.equips[1]=self
 
     def desequiper(self,creature : Creature) -> None:
         creature.hp-=self.defense
-    """def casse(self, #attaque_subite=le nombre de fois d'attaque subite#):
-        if attaque_subite < (self_durabilite)/2 :
-            if attaque_subite < (self_durabilite)/4 :
-                if attaque_subite > self_durabilite :
-                    #l'armure est détruite donc disparait du héro et ne reapparait pas dans son inventaire
-                    return
-                #on montre l'armure est ++abimée
-                return
-            # on montre l'armure est +abimée
-            #changement_emotion(1)   --> cause=1
-            return"""
+        creature.equips[1]=None
+
+    def use(self,creature : Creature) -> True:
+        self.equiper(creature)
+        return True
 
 class Amulette(Equipment):
 
@@ -313,14 +356,22 @@ class Amulette(Equipment):
         self.courage=courage
 
     def equiper (self,creature : Hero) -> None:
+        if creature.equips[0]!=None:
+            creature.equips[2].desequiper(creature)
         creature.hp+=self.defense
         creature.strength+=self.force
         creature.courage+=self.courage
+        creature.equips[2]=self
 
     def desequiper (self,creature : Hero) -> None:
         creature.hp-=self.defense
         creature.strength-=self.force
         creature.courage-=self.courage
+        creature.equips[2]=None
+
+    def use(self,creature : Hero) -> True:
+        self.equiper(creature)
+        return True
 
 class PNJ(Creature):
 
@@ -589,8 +640,9 @@ class Map(object):
                 deplacement = random.choice(direction)
                 self.move(i,deplacement)
         direction = [Coord(0,1),Coord(0,-1),Coord(1,0),Coord(-1,0),Coord(-1,1),Coord(-1,-1),Coord(1,1),Coord(1,-1)]
-        for i in self._elem :
+        for i in self._elem:
             if isinstance(i,Creature) and not (isinstance(i,Hero)):
+                i.creaturn()
                 if self._elem[i].distance(self._elem[self.hero])<=1 :
                     self.hero.meet(i)
                 elif self.get(self._elem[i]+self._elem[i].direction(self._elem[self.hero])) in self.listground :
@@ -650,8 +702,8 @@ class Game(object):
     monsters = { 0: [ Creature("Goblin",4), Creature("Bat",2,"W") ],
                  1: [ Creature("Ork",6,strength=2), Creature("Blob",10) ],
                  5: [ Creature("Dragon",20,strength=3) ] }
-    equipments = { 0: [ Equipment("potion","!",usage=lambda creature : heal(creature)),Pillules("or1","b",valeur_pillule=1)],
-                   1: [ Equipment("sword","s"), Equipment("arc"),Equipment("potion","!",usage= lambda creature : teleport(creature,True)) ,Pillules("or2","j",valeur_pillule=2)],
+    equipments = { 0: [ Arme("sword",3,37,"s"),Equipment("potion","!",usage=lambda creature : heal(creature)),Pillules("or1","b",valeur_pillule=1)],
+                   1: [ Equipment("arc"),Equipment("potion","!",usage= lambda creature : teleport(creature,True)) ,Pillules("or2","j",valeur_pillule=2)],
                    2: [ Equipment("chainmail"), Pillules("or5","p",valeur_pillule=5) ],
                    3: [ Equipment("portoloin","w",usage= lambda creature : teleport(creature,False)), Pillules("or10","J", valeur_pillule=10)]}
     def __init__(self,hero=None,level=1,sizemap=20):
@@ -730,11 +782,11 @@ class Game(object):
         self.canvas.config(width=1000,height=800)
         self.voirMap()
         self.updategraph()
-        [self.fenetre.bind(i,self.turn) for i in self._actions]
+        [self.fenetre.bind(i,self.gameturn) for i in self._actions]
         self.canvas.pack()
         self.fenetre.mainloop()
 
-    def turn(self,event) -> None:
+    def gameturn(self,event) -> None:
         if event.char in self._actions:
             self._actions[event.char](self.floor.hero)
         self.floor.moveAllMonsters()
@@ -803,7 +855,7 @@ class Game(object):
             if r<6 and ch+cv in self.floor:
                 self.mapvue[(cv+ch).y][(cv+ch).x]=str(self.floor[cv+ch])
                 self.mapvisible[(cv+ch).y][(cv+ch).x]=str(self.floor[cv+ch])
-            theta+=0.1
+            theta+=math.pi/32
 
 def theGame(game = Game()) -> Game:
     return game
