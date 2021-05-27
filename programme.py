@@ -6,16 +6,20 @@ from tkinter import *
 import copy
 import math
 
-def sign(x) -> int:
+def sign(x : float) -> int:
+    "Returns the sign of a float"
     if x > 0:
         return 1
     return -1
 
 def heal(creature) -> True:
+    """Heals a creature
+    Deprecated, we will prefer using the Status class"""
     creature.hp+=3
     return True
 
 def teleport(creature, unique : bool) -> bool:
+    "Teleports a creature from a place to another in the game's floor"
     f=theGame().floor
     l=len(f)
     c=Coord(random.randint(0,l),random.randint(0,l))
@@ -44,7 +48,7 @@ def getch():
         return msvcrt.getch().decode('utf-8')
 
 class Coord(object):
-    "Vec2D"
+    "Vec2D object, created by rectangular or polar coordinates"
 
     def __init__(self,x : int ,y : int ,angle=False):
         if not(angle):
@@ -127,9 +131,11 @@ class Coord(object):
             return len(self)>=other
 
     def distance(self,other) -> float:
+        "Diagonal distance between two points"
         return (self-other).__len__()
 
     def dirtrig(self):
+        "Direction from the center to a point"
         if self==Coord(0,0):
             return Coord(0,0)
         cos=self.x/self.__len__()
@@ -142,21 +148,27 @@ class Coord(object):
         return Coord(0,1)
 
     def direction(self,other):
+        "Direction from a point to another"
         return (self-other).dirtrig()
 
     def inverse(self):
+        "Inverse of a Coord(swapping x and y)"
         return Coord(self.y,self.x)
 
     def coin1(self,other):
+        "First combinaison of two Coords"
         return Coord(self.x,other.y)
 
     def coin2(self,other):
+        "Second combinaison of two Coords"
         return Coord(other.x,self.y)
 
     def middle(self,other):
+        "Middle of two Coords"
         return (self+other)//2
 
 class Status(object):
+    "Status affecting a creature each turn, making her losing points from a stat"
     def __init__(self,name,effect,cible="hp",prb=1):
         self.name=name
         self.cible=cible
@@ -164,7 +176,7 @@ class Status(object):
         self.prb=prb
 
 class Element(object):
-    "Élement de base pour la construction du roquelike"
+    "Basic Element of the roguelike"
 
     def __init__(self,name,abbrv=None,transparent=False):
         self.name=name
@@ -178,13 +190,15 @@ class Element(object):
         return self.abbrv
 
     def description(self) -> str:
+        "Description of the Element"
         return "<{}>".format(self.name)
 
     def meet(self,hero):
+        "Warning! Not defined for Elements yet!"
         raise NotImplementedError("Not implemented yet")
 
 class Creature(Element):
-    "Élement possédant des pv et une force, pouvant se déplacer dans une Map"
+    "Element with hps and strength, movable in a Map"
     def __init__(self,name,hp,abbrv=None,strength=1,inventory=[],equips=[None,None,None,None],bourse=0,vitesse=1):
         Element.__init__(self,name,abbrv)
         self.hp=hp
@@ -197,9 +211,11 @@ class Creature(Element):
         self.vitesse=vitesse
 
     def description(self) -> str:
+        "Description of the Creature"
         return Element.description(self)+"({})".format(self.hp)
 
     def meet(self,other) -> bool:
+        "Encounter between two creatures: the second is attacked by the first"
         self.hp-=other.strength
         theGame().addMessage(f"The {other.name} hits the {self.description()}")
         return False if self.hp>0 else True
@@ -778,7 +794,9 @@ class Game(object):
         marchand_d=PhotoImage(file=imgPATH+"marchand_vers_droite.png")
         marchand_g=PhotoImage(file=imgPATH+"marchand_vers_gauche.png")
         marchand_sf=PhotoImage(file=imgPATH+"marchand_sucette_de_face.png")
-        self.dicimages={"." : sol_img1,"," : sol_img2,"`" : sol_img3,"´" : sol_img4,"@" : hero_f,"!" : pot_img3,"G" : ted_img,"W":ted_img,"O":sad_img,"B":ted_img,"D":ted_img,"s":bequille_img,"!":pot_img1,"c":pot_img3,"b":or1_img,"j":or2_img,"p":or5_img,"P":or10_img,"M":marchand_f}
+        yellow_img=PhotoImage(file=imgPATH+"yellow.png")
+        dark_yellow_img=PhotoImage(file=imgPATH+"darkyellow.png")
+        self.dicimages={"." : sol_img1,"," : sol_img2,"`" : sol_img3,"´" : sol_img4,"@" : hero_f,"!" : pot_img3,"G" : ted_img,"W":ted_img,"O":sad_img,"B":ted_img,"D":ted_img,"s":bequille_img,"!":pot_img1,"c":pot_img3,"b":or1_img,"j":or2_img,"p":or5_img,"P":or10_img,"M":marchand_f,"ye":yellow_img,"dy":dark_yellow_img}
         self.canvas.config(width=1000,height=800)
         self.voirMap()
         self.updategraph()
@@ -801,13 +819,29 @@ class Game(object):
             x=0
             for k in i:
                 if k!=Map.empty:
-                    self.canvas.create_image(x,y,image=self.dicimages.get(self.floor.blankmap[int(y/32)][int(x/32)]))
+                    self.canvas.create_image(x*32,32*y,image=self.dicimages.get(self.floor.blankmap[int(y)][int(x)]))
                 if k in self.dicimages:
-                    self.canvas.create_image(x,y,image=self.dicimages.get(k))
+                    self.canvas.create_image(x*32,32*y,image=self.dicimages.get(k))
                 else:
-                    self.canvas.create_text(x,y,text=str(k),font="Arial 16")
-                x+=32
-            y+=32
+                    self.canvas.create_text(x*32,32*y,text=str(k),font="Arial 16")
+                x+=1
+            y+=1
+        y=600
+        for i in self.mapvisible:
+            x=800
+            for k in i:
+                if k!=Map.empty:
+                    self.canvas.create_image(x,y,image=self.dicimages.get("dy"))
+                x+=4
+            y+=4
+        y=600
+        for i in self.mapvue:
+            x=800
+            for k in i:
+                if k!=Map.empty:
+                    self.canvas.create_image(x,y,image=self.dicimages.get("ye"))
+                x+=4
+            y+=4
         self.canvas.create_text(85,120,text=self.readMessages(),font="Arial 16 italic",fill="blue")
         self.canvas.create_text(85,60,text=self.floor.hero.description(),font="Arial 16 italic",fill="blue")
         self.canvas.pack()
@@ -837,7 +871,6 @@ class Game(object):
         self.canvas=Canvas(self.fenetre,width=1200,height=800,background="black")
         self.canvas.place(x=0,y=0)
         self.canvas.create_text(85,120,text="GAME OVER",font="Arial 16 italic",fill="blue")
-        #self.canvas-self.canvas
 
     def voirMap(self):
         theta=0
