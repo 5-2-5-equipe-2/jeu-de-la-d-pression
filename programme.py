@@ -1,5 +1,6 @@
-#Projet Roguelike, par Nino Mulac, Ilane Pelletier et Arwen Duee-Moreau
-from time import sleep
+#!/usr/bin/python3
+#Projet Roguelike, par Nino Mulac, Ilane Pelletier, Arwen Duee-Moreau, Hugo Durand, Vaiki Martelli, et Kylian Girard
+#from time import sleep
 import random
 from typing import *
 from tkinter import *
@@ -49,7 +50,6 @@ def getch():
 
 class Coord(object):
     "Vec2D object, created by rectangular or polar coordinates"
-
     def __init__(self,x : int ,y : int ,angle=False):
         if not(angle):
             self.x=int(x)
@@ -199,10 +199,11 @@ class Element(object):
 
 class Creature(Element):
     "Element with hps and strength, movable in a Map"
-    def __init__(self,name,hp,abbrv=None,strength=1,inventory=[],equips=[None,None,None,None],bourse=0,vitesse=1):
+    def __init__(self,name,hp,abbrv=None,strength=1,defense=0,inventory=[],equips=[None,None,None,None],bourse=0,vitesse=1):
         Element.__init__(self,name,abbrv)
         self.hp=hp
         self.strength=strength
+        self.defense=defense
         self.bourse=bourse
         self._inventory=inventory
         self.equips=equips
@@ -221,11 +222,13 @@ class Creature(Element):
         return False if self.hp>0 else True
 
     def statuslose(self,status : Status):
+        "Make the Creature be affected by its statuses"
         if status.cible in self.__dict__:
             if random.random<status.prb:
                 self.__setitem__(status.cible,self.__getitem__(status.cible)+status.effect)
 
     def creaturn(self):
+        "Move a creature where it has to go, and affect it with its statuses"
         #if len(self.dpl)==0:
             #recalculer l'itinéraire
             #print("jesépakoifer")
@@ -235,29 +238,39 @@ class Creature(Element):
             if not(status.permanent):
                 self.statuslose(status)
 
-class Pillules(Element):
+    def take(self,equip)-> True:
+        "Taking an Equipment: we add it to the Creature's inventory"
+        if isinstance(equip,Equipment):
+            self._inventory.append(equip)
+            return True
+        raise TypeError
+
+class Pills(Element):
+    "Pills are the game's money: we find them randomly in the game, they have a value according to their gold value."
     def __init__(self,name,abbvr=None,usage=None,transparent=True, valeur_pillule=0):
         Equipment.__init__(self,name,abbvr,usage,transparent)
         self.valeur_pillule=valeur_pillule
 
     def meet(self, creature : Creature):
+        "Meet a pill: we add her value to our bourse."
         theGame().addMessage(f"You pick up a {self.name}")
         creature.bourse+=self.valeur_pillule
         return True
 
 class Equipment(Element):
-    "Élément ramassable et équipable par le héros"
-
+    "Pickable and usable Element"
     def __init__(self,name,abbvr=None,usage=None,transparent=False,bourse=0,enchant=[]):
         Element.__init__(self,name,abbvr,transparent)
         self.usage=usage
         self.enchant=enchant
 
-    def meet(self,hero) -> True:
+    def meet(self,creature) -> True:
+        "Meet a equipment: add him to the creature's equipment"
         theGame().addMessage(f"You pick up a {self.name}")
-        return Hero.take(hero,self)
+        return Creature.take(creature,self)
 
     def use(self,creature) -> bool:
+        "Use an equipment on a creature"
         if self.usage!=None:
             theGame().addMessage(f"The {creature.name} uses the {self.name}")
             return self.usage(creature)
@@ -265,11 +278,14 @@ class Equipment(Element):
         return False
 
 class Enchant(object):
+    "Enchant on upgrade to apply on an Equipment"
     def __init__(self,name="+",effect=None,increase=[("force",1)]):
         self.name=name
         self.effect=effect
         self.increase=increase
+
     def appy(self,equip : Equipment):
+        "Enchanting an Equipment: we increase the attributes targeted and add an effect, if necessary"
         equip.name+=" "+self.name
         for i in self.increase:
             equip.__setitem__(i[0],i[1]+equip.__getitem__(i[0]))
@@ -277,7 +293,7 @@ class Enchant(object):
                 equip.enchant.append(self.effect)
 
 class Hero(Creature):
-    "Le héros, controllé par le joueur"
+    "The Hero, controled by the player in the game."
     def __init__(self, name="Hero", hp=370, abbrv="@", strength=2):
         Creature.__init__(self,name,hp,abbrv,strength)
         self.joie=50
@@ -286,19 +302,15 @@ class Hero(Creature):
         self.peur=50
         self.xp=0
 
-    def take(self,equip)-> True:
-        if isinstance(equip,Equipment):
-            self._inventory.append(equip)
-            return True
-        raise TypeError
-
     def description(self) -> str:
+        "Short description of the Hero."
         return Creature.description(self)+"{} ${}".format(self._inventory,self.bourse)
 
     def __repr__(self) -> str:
         return self.abbrv
 
     def fullDescription(self) -> str:
+        "Long description of the hero, including all his attributes"
         a=self.__dict__
         res=""
         for i in a:
@@ -308,9 +320,11 @@ class Hero(Creature):
         return res
 
     def kill(self) -> None:
+        "Function to kill the hero"
         self.hp=0
 
     def use(self,item : Equipment) -> None:
+        "Using an item: we use it with Equipment.use() and remove it from the Hero's inventory if necessary"
         if not(isinstance(item,Equipment)):
             raise TypeError("C'est pas un équipement!")
         if not(item in self._inventory):
@@ -318,8 +332,8 @@ class Hero(Creature):
         if item.use(self):
             self._inventory.remove(item)
 
-class Arme(Equipment):
-
+class Weapon(Equipment):
+    "Equipable Equipment, increasing the creature's strength(Weapon: slot 0 in the Creature's equips)"
     def __init__(self, name, force, durabilite, abbrv="", usage=None):
         Equipment.__init__(self, name, abbrv)
         self.usage = usage
@@ -327,21 +341,24 @@ class Arme(Equipment):
         self.durabilite=durabilite
 
     def equiper(self,creature : Creature) -> None:
+        "Equipment of a weapon: we unequip the previous weapon,replace it by the new one, and increase the creature's strength."
         if creature.equips[0]!=None:
             creature.equips[0].desequiper(creature)
         creature.strength+=self.force
         creature.equips[0]=self
 
     def desequiper(self,creature : Creature) -> None:
+        "Unequiping a Weapon: we decrease the creature's force and empty the slot"
         creature.equips[0]=None
         creature.strength-=self.force
 
     def use(self,creature : Creature) -> True:
+        "Using a weapon: equip it and return True to remove it from the inventory."
         self.equiper(creature)
         return True
 
-class Armure(Equipment):
-
+class Armor(Equipment):
+    "Equipable Equipment, increasing the creature's defense(Armor: slot 1 in the Creature's equips)"
     def __init__(self, name, defense, durabilite, abbrv="", usage=None):
         Equipment.__init__(self, name, abbrv)
         self.usage = usage
@@ -349,21 +366,24 @@ class Armure(Equipment):
         self.durabilite=durabilite
 
     def equiper(self,creature : Creature) -> None:
+        "Equipment of a armor: we unequip the previous armor,replace it by the new one, and increase the creature's defense."
         if creature.equips[0]!=None:
             creature.equips[1].desequiper(creature)
         creature.hp+=self.defense
         creature.equips[1]=self
 
     def desequiper(self,creature : Creature) -> None:
+        "Unequiping an Armor: we decrease the creature's defense and empty the slot"
         creature.hp-=self.defense
         creature.equips[1]=None
 
     def use(self,creature : Creature) -> True:
+        "Using a armor: equip it and return True to remove it from the inventory."
         self.equiper(creature)
         return True
 
-class Amulette(Equipment):
-
+class Amulet(Equipment):
+    "Equipable Equipment, increasing the hero's defense, strength, or other things if needed(Amulet: slot 2 in the Hero's equips)"
     def __init__(self,name,defense=0,force=0,courage=0,abbrv="",usage=None):
         Equipment.__init__(self, name, abbrv)
         self.usage = usage
@@ -372,6 +392,7 @@ class Amulette(Equipment):
         self.courage=courage
 
     def equiper (self,creature : Hero) -> None:
+        "Equipment of a amulet: we unequip the previous amulet,replace it by the new one, and increase the hero's stats."
         if creature.equips[0]!=None:
             creature.equips[2].desequiper(creature)
         creature.hp+=self.defense
@@ -380,46 +401,54 @@ class Amulette(Equipment):
         creature.equips[2]=self
 
     def desequiper (self,creature : Hero) -> None:
+        "Unequiping a Amulet: we decrease the hero's stats and empty the slot"
         creature.hp-=self.defense
         creature.strength-=self.force
         creature.courage-=self.courage
         creature.equips[2]=None
 
     def use(self,creature : Hero) -> True:
-        self.equiper(creature)
-        return True
+        "Using a amulet: equip it and return True to remove it from the inventory. Warning: only the Hero can equip an amulet!"
+        if isinstance(creature,Hero):
+            self.equiper(creature)
+            return True
+        raise TypeError("Not a Hero!")
 
-class PNJ(Creature):
-
+class NPC(Creature):
+    "NPC creature, can talk when met."
     def __init__(self, name, hp=100, abbrv="", strength=0, archer=None, actif=None):
         Creature.__init__(self, name, hp, abbrv, strength, archer)
         self.actif=actif
 
     def meet(self, other) -> None:
+        "Adds dialogues in the messages."
         if isinstance(other,Hero):
             if self.actif!=None:
                 for i in self.actif:
                     theGame().addMessage(self.name+" : "+ i)
 
-class Marchand(PNJ):
-
-    def __init__(self, name, hp=100, abbrv="", strength=0, archer=None, actif=["Infiermière : Bonjour, mon loulou. Quel age as tu? Ah oui tu es jeune!","Et qu'as tu dans des poches? Si tu as trouvé des pillules bleus ou jaunes ne les mangent pas!","Vient plutot me les donner, en échange je te donnerai des cookies ou des sucreries.","C'est d'accord? Alors as tu trouvé ce style de médicament?"],dialoguenon=["Infiermière : Ce n'est pas grave loulou. reviens me voir si tu en trouve."],dialogueoui=["Infiermière : A oui effectivement, contre quoi veux tu me les échanger."]):
-        PNJ.__init__(self, name, hp, abbrv, strength, archer, actif)
+class Marchand(NPC):
+    "Particular NPC that can sell you Equipments or Actions(<not implemented yet)."
+    def __init__(self, name="Infirmière", hp=100, abbrv="", strength=0, archer=None, actif=["Bonjour, mon loulou. Quel age as tu? Ah oui tu es jeune!","Et qu'as tu dans des poches? Si tu as trouvé des pillules bleus ou jaunes ne les mangent pas!","Vient plutot me les donner, en échange je te donnerai des cookies ou des sucreries.","C'est d'accord?","Alors, as tu trouvé ce type de médicaments?"],dialoguenon=["Ce n'est pas grave loulou, reviens me voir si tu en trouves."],dialogueoui=["Ah oui effectivement, contre quoi veux tu me les échanger?"]):
+        NPC.__init__(self, name, hp, abbrv, strength, archer, actif)
         self.dialoguenon=dialoguenon
         self.dialogueoui=dialogueoui
         self.chariot=[]
         for i in range(5):
-            self.chariot.append(random.choice([Equipment("bonbon"),Equipment("cookie"),Equipment("sucette"),Arme("béquille"),Equipment("chewing-gum")]))
+            self.chariot.append(random.choice([Equipment("bonbon"),Equipment("cookie"),Equipment("sucette"),Weapon("béquille"),Equipment("chewing-gum")]))
 
     def meet(self,creature) -> None:
+        "Inits the dialogues and waits for the response with bind"
         if isinstance(creature,Hero):
-            [theGame().addMessage(i) for i in self.actif]
+            [theGame().addMessage(self.name+" : "+ i) for i in self.actif]
             theGame().fenetre.bind('b', self.fin_de_discussion())
 
-    def reponse(self) -> None:
+    def response(self) -> None:
+        "shopping not implemented yet"
         [theGame().addMessage(i) for i in self.dialogueoui]
 
     def fin_de_discussion(self) -> None:
+        "Prints dialogs and exits"
         [theGame().addMessage(i) for i in self.dialoguenon]
 
 class Room(object):
@@ -430,18 +459,22 @@ class Room(object):
         self.c2=c2
 
     def __contains__(self,coord:Coord)->bool:
+        "Check if a Coord is in the Room"
         return self.c1.x<=coord.x<=self.c2.x and self.c1.y<=coord.y<=self.c2.y
 
     def __repr__(self) -> str:
         return f"[<{self.c1.x},{self.c1.y}>, <{self.c2.x},{self.c2.y}>]"
 
     def center(self) -> Coord:
+        "Returns the center of the Room, using the Coord.middle method"
         return self.c1.middle(self.c2)
 
     def coins(self) -> List[Coord]:
+        "Returns a list of all corners from the room"
         return [self.c1,self.c2,self.c1.coin1(self.c2),self.c2.coin1(self.c1)]
 
     def intersect(self,other) -> bool:
+        "Checks if two rooms share Coords"
         for i in self.coins():
             if i in other:
                 return True
@@ -451,9 +484,11 @@ class Room(object):
         return False
 
     def randCoord(self) -> Coord:
+        "Returns a random Coord in the Room."
         return Coord(random.randint(self.c1.x,self.c2.x),random.randint(self.c1.y,self.c2.y))
 
     def randEmptyCoord(self,map) -> Coord:
+        "Returns a coord not assigned to any Element in the Map"
         coord=self.center()
         cc=self.center()
         while coord in map._elem.values() or coord==cc:
@@ -461,18 +496,18 @@ class Room(object):
         return coord
 
     def decorate(self,map) -> None:
+        "Adds random elements in the Room in the Map"
         map.put(self.randEmptyCoord(map),theGame().randEquipment())
         map.put(self.randEmptyCoord(map),theGame().randMonster())
 
 class Map(object):
-    "Carte du jeu dans lequel évoluent le héros et les créatures"
+    "Map of the Game, where Creatures live."
     ground1="."
     ground2=","
     ground3="`"
     ground4="´"
     listground=[ground1,ground2,ground3,ground4]
     empty=" "
-
     def __init__(self,size=10,hero=None,nbrooms=10):
         self.nbrooms=nbrooms
         self._rooms=[]
@@ -496,20 +531,24 @@ class Map(object):
         return "\n".join(["".join([str(self._mat[n][k]) for k in range(len(self))]) for n in range(len(self))])+"\n"
 
     def __len__(self) -> int:
+        "Returns the len of the tiles matrix, since the Map is a square"
         return len(self._mat)
 
     def __contains__(self,item) -> bool:
+        "Check, for an element, if it is in _elem, or for a coord, if it is in the map"
         if isinstance(item,Coord):
             return 0<=item.x<=len(self)-1 and 0<=item.y<=len(self)-1
         return item in self._elem.keys()
 
     def __getitem__(self,item) -> Any:
+        "Returns, for an Element, its Coord in the map, and for a Coord, its Element"
         if type(item) is Coord:
             return self.get(item)
         else:
             return self.pos(item)
 
     def __setitem__(self,cle,valeur)->None:
+        "Moves or adds elements to the given Coord."
         if type(cle) is Coord:
             self.put(cle,valeur)
         else:
@@ -519,6 +558,7 @@ class Map(object):
                 self.tp(cle,valeur)
 
     def get(self,coord : Coord, testeroupas=True) -> Element:
+        "Returns the Element in the Map having this Coord."
         if testeroupas:
             self.checkCoord(coord)
         for i,j in self._elem.items():
@@ -527,16 +567,20 @@ class Map(object):
         return self._mat[coord.y][coord.x]
 
     def pos(self,element : Element) -> Coord:
+        "Returns the Coords of an Element"
         self.checkElement(element)
         return self._elem.get(element)
 
     def groundize(self,coord : Coord) -> None:
+        "Puts a ground on a cell.(we have 4 different grounds, and they are saved in blankmap)"
         self._mat[coord.y][coord.x]=self.blankmap[coord.y][coord.x]
 
     def elementize(self,coord : Coord, abbrv : str) -> None:
+        "Puts the abbvr of an Element on the Map."
         self._mat[coord.y][coord.x]=abbrv
 
     def put(self,coord : Coord,element : Element) -> None:
+        "Puts an Element at the given Coord."
         self.checkCoord(coord)
         self.checkElement(element)
         if self[coord]==self.empty or isinstance(self[coord],Element):
@@ -547,6 +591,7 @@ class Map(object):
         self.elementize(coord,element.abbrv)
 
     def rm(self,element : Element) -> None:
+        "Removes the Element from the Map(or the element at the given Coord)"
         if type(element) is Coord:
             self.checkCoord(element)
             self._elem = {key:val for key, val in self._elem.items() if not val == element}
@@ -555,6 +600,7 @@ class Map(object):
             self.groundize(self.pos(self._elem.pop(element)))
 
     def move(self,element : Element,way : Coord) -> None:
+        "Moves an element from a Coord to another relatively, meets the destination."
         coordarr=self.pos(element)+way
         if coordarr in self:
             if not coordarr in self._elem.values() and self._mat[coordarr.y][coordarr.x] in Map.listground:
@@ -566,9 +612,11 @@ class Map(object):
                     self.rm(coordarr)
 
     def tp(self,element : Element,dest : Coord) -> None:
+        "Moves absolutely"
         self.move(element,self.pos(element)-dest)
 
-    def remplirrectangle(self,c1:Coord,c2:Coord,thing=" ") -> None:
+    def fillrectangle(self,c1:Coord,c2:Coord,thing=empty) -> None:
+        "Fills a rectangle of Cords with a given object. For a list, the object will be chosen randomly"
         if type(thing) is list:
             for i in range(c1.x,c2.x+1):
                 for j in range(c1.y,c2.y+1):
@@ -579,29 +627,34 @@ class Map(object):
                     self._mat[j][i]=thing
 
     def addRoom(self,room:Room) -> None:
+        "Adds a Room to the list of rooms to reach, and fills the Map with grounds"
         self._roomsToReach.append(room)
-        self.remplirrectangle(room.c1,room.c2,Map.listground)
+        self.fillrectangle(room.c1,room.c2,Map.listground)
 
     def findRoom(self,coord : Coord) -> Any:
+        "Finds the first Room of the map containing the Coord, returns False if none."
         for i in self._roomsToReach:
             if coord in i:
                 return i
         return False
 
     def intersectNone(self,room : Room) -> bool:
+        "Check if any Room on the Map intersects the one we're checking"
         for i in self._roomsToReach:
             if room.intersect(i):
                 return False
         return True
 
     def dig(self,coord : Coord) -> None:
-        self._mat[coord.y][coord.x]=random.choice(Map.listground)
+        "groundizes a Coord, and if it is in a room, removes it from roomToReach "
+        self.groundize(coord)
         a=self.findRoom(coord)
         if a:
             self._rooms.append(a)
             self._roomsToReach.remove(a)
 
     def corridor(self,c1 : Coord,c2 : Coord) -> None:
+        "Digs in two directions "
         self.dig(c1)
         coord=Coord(c1.x,c1.y)
         while not(coord==c2):
@@ -718,10 +771,10 @@ class Game(object):
     monsters = { 0: [ Creature("Goblin",4), Creature("Bat",2,"W") ],
                  1: [ Creature("Ork",6,strength=2), Creature("Blob",10) ],
                  5: [ Creature("Dragon",20,strength=3) ] }
-    equipments = { 0: [ Arme("sword",3,37,"s"),Equipment("potion","!",usage=lambda creature : heal(creature)),Pillules("or1","b",valeur_pillule=1)],
-                   1: [ Equipment("arc"),Equipment("potion","!",usage= lambda creature : teleport(creature,True)) ,Pillules("or2","j",valeur_pillule=2)],
-                   2: [ Equipment("chainmail"), Pillules("or5","p",valeur_pillule=5) ],
-                   3: [ Equipment("portoloin","w",usage= lambda creature : teleport(creature,False)), Pillules("or10","J", valeur_pillule=10)]}
+    equipments = { 0: [ Weapon("sword",3,37,"s"),Equipment("potion","!",usage=lambda creature : heal(creature)),Pills("or1","b",valeur_pillule=1)],
+                   1: [ Equipment("arc"),Equipment("potion","!",usage= lambda creature : teleport(creature,True)) ,Pills("or2","j",valeur_pillule=2)],
+                   2: [ Equipment("chainmail"), Pills("or5","p",valeur_pillule=5) ],
+                   3: [ Equipment("portoloin","w",usage= lambda creature : teleport(creature,False)), Pills("or10","J", valeur_pillule=10)]}
     def __init__(self,hero=None,level=1,sizemap=20):
         self.hero=Hero()
         if hero!=None:
@@ -774,8 +827,9 @@ class Game(object):
         self.fenetre.mainloop()
 
     def initgraph(self)-> None:
-        imgPATH="images/"
-        hero_f=PhotoImage(file=imgPATH+"hero_de_face.png")
+        genPATH=__file__
+        imgPATH=genPATH[0:-12]+"images/"
+        hero_f=PhotoImage(file=imgPATH+"hero_face_i.png")
         sol_img1=PhotoImage(file=imgPATH+"sol_1.png")
         sol_img2=PhotoImage(file=imgPATH+"sol_2.png")
         sol_img3=PhotoImage(file=imgPATH+"sol_3.png")
@@ -819,15 +873,15 @@ class Game(object):
             x=0
             for k in i:
                 if k!=Map.empty:
-                    self.canvas.create_image(x*32,32*y,image=self.dicimages.get(self.floor.blankmap[int(y)][int(x)]))
+                    self.canvas.create_image(x*32,y*32,image=self.dicimages.get(self.floor.blankmap[int(y)][int(x)]))
                 if k in self.dicimages:
-                    self.canvas.create_image(x*32,32*y,image=self.dicimages.get(k))
+                    self.canvas.create_image(x*32,y*32,image=self.dicimages.get(k))
                 else:
-                    self.canvas.create_text(x*32,32*y,text=str(k),font="Arial 16")
+                    self.canvas.create_text(x*32,y*32,text=str(k),font="Arial 16")
                 x+=1
             y+=1
         y=600
-        for i in self.mapvisible:
+        for i in self.mapvue:
             x=800
             for k in i:
                 if k!=Map.empty:
@@ -835,7 +889,7 @@ class Game(object):
                 x+=4
             y+=4
         y=600
-        for i in self.mapvue:
+        for i in self.mapvisible:
             x=800
             for k in i:
                 if k!=Map.empty:
