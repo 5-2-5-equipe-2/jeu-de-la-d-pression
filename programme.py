@@ -14,7 +14,7 @@ def sign(x : float) -> int:
     return -1
 
 def heal(creature) -> True:
-    """Heals a creature
+    """Heals a creature \n
     Deprecated, we will prefer using the Status class"""
     creature.hp+=3
     return True
@@ -646,15 +646,15 @@ class Map(object):
         return True
 
     def dig(self,coord : Coord) -> None:
-        "groundizes a Coord, and if it is in a room, removes it from roomToReach "
-        self.groundize(coord)
+        "Groundizes a Coord, and if it is in a room, removes it from roomToReach."
+        self._mat[coord.y][coord.x]=random.choice(self.listground)
         a=self.findRoom(coord)
         if a:
             self._rooms.append(a)
             self._roomsToReach.remove(a)
 
     def corridor(self,c1 : Coord,c2 : Coord) -> None:
-        "Digs in two directions "
+        "Digs from a Coord to another"
         self.dig(c1)
         coord=Coord(c1.x,c1.y)
         while not(coord==c2):
@@ -662,22 +662,26 @@ class Map(object):
             self.dig(coord)
 
     def dircorridor(self,c1 : Coord,c2 : Coord) -> Coord:
+        "Returns the direction to dig to."
         if c1.y!=c2.y:
             return Coord(0,1) if c1.y<c2.y else Coord(0,-1)
         if c1.x!=c2.x:
             return Coord(1,0) if c1.x<c2.x else Coord(-1,0)
 
     def reach(self) -> None:
+        "Digs between two random rooms."
         r1=random.choice(self._rooms)
         r2=random.choice(self._roomsToReach)
         self.corridor(r1.center(),r2.center())
 
     def reachAllRooms(self) -> None:
+        "Reachs all rooms of the Map."
         self._rooms.append(self._roomsToReach.pop(0))
         while len(self._roomsToReach)>0:
             self.reach()
 
     def randRoom(self) -> Room:
+        "Creates a random room"
         x1=random.randint(0,len(self)-3)
         y1=random.randint(0,len(self)-3)
         largeur=random.randint(3,8)
@@ -687,27 +691,27 @@ class Map(object):
         return Room(Coord(x1,y1),Coord(x2,y2))
 
     def generateRooms(self,n) -> None:
+        "Creates n Rooms, and if possible, adds them to the Map (-> puts from 0 to n new Rooms)"
         for i in range(n):
             r=self.randRoom()
             if self.intersectNone(r):
                 self.addRoom(r)
 
     def checkCoord(self,coord) -> None:
+        "Method to check if an object is a Coord in the Map. Raises errors."
         if not(type(coord) is Coord):
             raise TypeError('Not a Coord')
         if not coord in self:
             raise IndexError('Out of map coord')
 
     def checkElement(self,elem) -> None:
+        "Method to check if an object is an Element. Raises errors."
         if not(isinstance(elem,Element)):
             raise TypeError('Not a Element')
 
     def moveAllMonsters(self) -> None:
-        def aleatoire(i,direction):
-            chance = random.randint(1,4)
-            if chance == 4:
-                deplacement = random.choice(direction)
-                self.move(i,deplacement)
+        """Moves all creatures from the map, except the Hero.
+        some monsters dance macarena, we have to fix this"""
         direction = [Coord(0,1),Coord(0,-1),Coord(1,0),Coord(-1,0),Coord(-1,1),Coord(-1,-1),Coord(1,1),Coord(1,-1)]
         for i in self._elem:
             if isinstance(i,Creature) and not (isinstance(i,Hero)):
@@ -717,8 +721,9 @@ class Map(object):
                 elif self.get(self._elem[i]+self._elem[i].direction(self._elem[self.hero])) in self.listground :
                     if self._elem[i].distance(self._elem[self.hero])<6 :
                         self.move(i,self._elem[i].direction(self._elem[self.hero]))
-                    else:
-                        aleatoire(i,direction)
+                    elif random.randint(0,3)==0:
+                        deplacement = random.choice(direction)
+                        self.move(i,deplacement)
 
                 else:
                     if self._elem[i].distance(self._elem[self.hero])<6 :
@@ -730,8 +735,9 @@ class Map(object):
                             self.move(i,Coord(0,sign(new.x)))
                         else:
                             self.move(i,Coord(sign(new.y),0))
-                    else:
-                        aleatoire(i,direction)
+                    elif random.randint(0,3)==0:
+                        deplacement = random.choice(direction)
+                        self.move(i,deplacement)
 
 class Escalier(Element):
     def __init__(self,name,abbrv=None,up=None):
@@ -739,7 +745,8 @@ class Escalier(Element):
         self.up=up
 
     def meet(self,hero):
-        '''theGame().etages est la variables contenant les etages'''
+        "Changes the stage where the Hero is."
+        #theGame().etages contains stages
         if isinstance(hero,Hero):
             if self.up==None:
                 if theGame().stage==10:
@@ -758,7 +765,8 @@ class Escalier(Element):
         map.put(self.center(),self)
 
 class Game(object):
-    "Jeu"
+    """The Game class.
+    Please use theGame() to remain in the same game..."""
     _actions={"z" : lambda hero : theGame().floor.move(hero,Coord(0,-1)),
               "s" : lambda hero : theGame().floor.move(hero,Coord(0,1)),
               "q" : lambda hero : theGame().floor.move(hero,Coord(-1,0)),
@@ -782,17 +790,20 @@ class Game(object):
         self.level=level
         self.floor=None
         self._message=[]
-        self.mapvue=[[Map.empty for i in range(sizemap+2)] for k in range(sizemap+2)]
+        self.seenmap=[[Map.empty for i in range(sizemap+2)] for k in range(sizemap+2)]
         self.sizemap=sizemap
-        self.mapvisible=[[Map.empty for i in range(self.sizemap+2)] for k in range(self.sizemap+2)]
+        self.viewablemap=[[Map.empty for i in range(self.sizemap+2)] for k in range(self.sizemap+2)]
 
     def buildFloor(self,size=20) -> None:
+        "Creates the Game's floor."
         self.floor=Map(hero=self.hero,size=size)
 
     def addMessage(self,msg) -> None:
+        "Adds a message to be printed on the screen."
         self._message.append(msg)
 
     def readMessages(self) -> str:
+        "Returns all messages to be printed on the screen"
         if self._message!=[]:
             a=". ".join(self._message)+". "
             self._message=[]
@@ -800,6 +811,7 @@ class Game(object):
         return ""
 
     def randElement(self,collection : dict) -> Element:
+        "Returns a copy from an element of a dictionnary in the form {rarity<int> : List[Element],...}"
         x=random.expovariate(1/self.level)
         n=int(x)
         while not(n in collection):
@@ -807,26 +819,23 @@ class Game(object):
         return copy.copy(random.choice(collection[n]))
 
     def randEquipment(self) -> Equipment:
+        "Returns a random Equipment using randElement"
         return self.randElement(self.equipments)
 
     def randMonster(self) -> Creature:
+        "Returns a random Creature using randElement"
         return self.randElement(self.monsters)
 
     def select(self,l : List[Equipment]) -> Equipment:
+        """Prints the inventory and uses getch to choose which Equipment to use.
+        Not in the graphical interface yet"""
         print("Choose item>",[f"{i}: {l[i].name}" for i in range(len(l))])
         a=getch()
         if a in [str(i) for i in range(len(l))]:
             return l[int(a)]
 
-    def playthegame(self) -> None:
-        self.canvas=Canvas(self.fenetre,width=1200,height=800,background="black")
-        self.canvas.place(x=0,y=0)
-        bouton_quitter = Button(self.fenetre, text='Quitter', command=self.fenetre.destroy)
-        bouton_quitter.place(x=1200,y=800)
-        self.initgraph()
-        self.fenetre.mainloop()
-
     def initgraph(self)-> None:
+        "Creates the dictionary of images,and binds actions to the Tk window, then creates the mainloop."
         genPATH=__file__
         imgPATH=genPATH[0:-12]+"images/"
         hero_f=PhotoImage(file=imgPATH+"hero_face_i.png")
@@ -843,11 +852,11 @@ class Game(object):
         or2_img=PhotoImage(file=imgPATH+"or2.png")
         or5_img=PhotoImage(file=imgPATH+"or5.png")
         or10_img=PhotoImage(file=imgPATH+"or10.png")
-        marchand_f=PhotoImage(file=imgPATH+"marchand_de_face.png")
-        marchand_f=PhotoImage(file=imgPATH+"marchand_de_face2.png")
-        marchand_d=PhotoImage(file=imgPATH+"marchand_vers_droite.png")
-        marchand_g=PhotoImage(file=imgPATH+"marchand_vers_gauche.png")
-        marchand_sf=PhotoImage(file=imgPATH+"marchand_sucette_de_face.png")
+        marchand_f=PhotoImage(file=imgPATH+"marchand_de_face.png")#not used yet
+        marchand_f=PhotoImage(file=imgPATH+"marchand_de_face2.png")#not used yet
+        marchand_d=PhotoImage(file=imgPATH+"marchand_vers_droite.png")#not used yet
+        marchand_g=PhotoImage(file=imgPATH+"marchand_vers_gauche.png")#not used yet
+        marchand_sf=PhotoImage(file=imgPATH+"marchand_sucette_de_face.png")#not used yet
         yellow_img=PhotoImage(file=imgPATH+"yellow.png")
         dark_yellow_img=PhotoImage(file=imgPATH+"darkyellow.png")
         self.dicimages={"." : sol_img1,"," : sol_img2,"`" : sol_img3,"´" : sol_img4,"@" : hero_f,"!" : pot_img3,"G" : ted_img,"W":ted_img,"O":sad_img,"B":ted_img,"D":ted_img,"s":bequille_img,"!":pot_img1,"c":pot_img3,"b":or1_img,"j":or2_img,"p":or5_img,"P":or10_img,"M":marchand_f,"ye":yellow_img,"dy":dark_yellow_img}
@@ -859,6 +868,7 @@ class Game(object):
         self.fenetre.mainloop()
 
     def gameturn(self,event) -> None:
+        "Makes an action according to the bind result"
         if event.char in self._actions:
             self._actions[event.char](self.floor.hero)
         self.floor.moveAllMonsters()
@@ -866,10 +876,15 @@ class Game(object):
         self.updategraph()
 
     def updategraph(self) -> None:
+        """Main graphic function.
+        Displays the map on the canvas, using the images defined in initgraph.
+        Then adds the minimap on the corner of the screen (place not defined yet, currently (600,600)).
+        And ends the game if the Hero is dead.
+        """
         y=0
         self.canvas.delete("all")
         #print(self.floor,"\n".join(["".join([str(self.mapvisible[n][k]) for k in range(self.sizemap)]) for n in range(self.sizemap)])+"\n") -> debug
-        for i in self.mapvisible:
+        for i in self.viewablemap:
             x=0
             for k in i:
                 if k!=Map.empty:
@@ -881,7 +896,7 @@ class Game(object):
                 x+=1
             y+=1
         y=600
-        for i in self.mapvue:
+        for i in self.seenmap:
             x=800
             for k in i:
                 if k!=Map.empty:
@@ -889,7 +904,7 @@ class Game(object):
                 x+=4
             y+=4
         y=600
-        for i in self.mapvisible:
+        for i in self.viewablemap:
             x=800
             for k in i:
                 if k!=Map.empty:
@@ -903,6 +918,8 @@ class Game(object):
             self.endgame()
 
     def begingame(self):
+        """Inits the Game, creates the Tk window and the Canvas, launches the mainloop by executing initgraph.
+        \n Not perfect yet"""
         self.buildFloor(20)
         self.fenetre=Tk()
         self.fenetre.title('DG')
@@ -918,33 +935,40 @@ class Game(object):
         self.canvas.destroy()
         #bouton_jouer = Button(self.fenetre,text='Jouer',command=self.playthegame)
         #bouton_jouer.place(x=1500,y=800)
-        self.playthegame()
+        self.canvas=Canvas(self.fenetre,width=1200,height=800,background="black")
+        self.canvas.place(x=0,y=0)
+        bouton_quitter = Button(self.fenetre, text='Quitter', command=self.fenetre.destroy)
+        bouton_quitter.place(x=1200,y=800)
+        self.initgraph()
 
     def endgame(self) -> None:
+        "Ends the game"
         self.canvas.delete("all")
         self.canvas=Canvas(self.fenetre,width=1200,height=800,background="black")
         self.canvas.place(x=0,y=0)
         self.canvas.create_text(85,120,text="GAME OVER",font="Arial 16 italic",fill="blue")
 
     def voirMap(self):
+        "Modifies the value of viewablemap and seenmap to match to the tiles viewable and seen."
         theta=0
-        self.mapvisible=[[" " for i in range(self.sizemap+2)] for k in range(self.sizemap+2)]
+        self.viewablemap=[[" " for i in range(self.sizemap+2)] for k in range(self.sizemap+2)]
         ch=self.floor[self.floor.hero]
         while theta<=2*math.pi:
             r=0
             cv=Coord(0,0)
             while r<=6 and (ch+cv in self.floor) and (self.floor[ch+cv] in Map.listground or self.floor[self.floor.hero]==ch+cv):
-                self.mapvue[(cv+ch).y][(cv+ch).x]=str(self.floor[cv+ch])
-                self.mapvisible[(cv+ch).y][(cv+ch).x]=str(self.floor[cv+ch])
+                self.seenmap[(cv+ch).y][(cv+ch).x]=str(self.floor[cv+ch])
+                self.viewablemap[(cv+ch).y][(cv+ch).x]=str(self.floor[cv+ch])
                 r+=0.2
                 cv=Coord(r,theta,True)
             cv=Coord(r+0.5,theta,True)
             if r<6 and ch+cv in self.floor:
-                self.mapvue[(cv+ch).y][(cv+ch).x]=str(self.floor[cv+ch])
-                self.mapvisible[(cv+ch).y][(cv+ch).x]=str(self.floor[cv+ch])
+                self.seenmap[(cv+ch).y][(cv+ch).x]=str(self.floor[cv+ch])
+                self.viewablemap[(cv+ch).y][(cv+ch).x]=str(self.floor[cv+ch])
             theta+=math.pi/32
 
 def theGame(game = Game()) -> Game:
+    "Returns the Game singleton."
     return game
 
 theGame().begingame()
