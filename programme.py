@@ -865,7 +865,7 @@ class Game(object):
     monsters = { 0: [ Creature("Goblin",4), Creature("Bat",2,"W") ],
                  1: [ Creature("Ork",6,strength=2), Creature("Blob",10) ],
                  5: [ Creature("Dragon",20,strength=3) ] }
-    equipments = { 0: [ Weapon("sword",3,37,"s"),Equipment("potion","!",usage=lambda creature : heal(creature)),Pills("or1","b",valeur_pillule=1)],
+    equipments = { 0: [ Equipment("arc"),Weapon("sword",3,37,"s"),Equipment("potion","!",usage=lambda creature : heal(creature)),Pills("or1","b",valeur_pillule=1)],
                    1: [ Equipment("arc"),Equipment("potion","!",usage= lambda creature : teleport(creature,True)) ,Pills("or2","j",valeur_pillule=2)],
                    2: [ Equipment("chainmail"), Pills("or5","p",valeur_pillule=5) ],
                    3: [ Equipment("portoloin","w",usage= lambda creature : teleport(creature,False)), Pills("or10","J", valeur_pillule=10)]}
@@ -951,6 +951,7 @@ class Game(object):
         marchand_d=PhotoImage(file=imgPATH+"marchand_vers_droite.png")
         marchand_g=PhotoImage(file=imgPATH+"marchand_vers_gauche.png")
         marchand_sf=PhotoImage(file=imgPATH+"marchand_sucette_de_face.png")
+        img_stonelance=PhotoImage(file=imgPATH+"lancepierre.png")
         esc_up=PhotoImage(file=imgPATH+"escalier_up.png")
         esc_down=PhotoImage(file=imgPATH+"escalier_down.png")
         vide = PhotoImage(file=imgPATH+"empty.png").zoom(2)
@@ -965,9 +966,9 @@ class Game(object):
         vie =PhotoImage(file=imgPATH+"health.png")
         herobox = PhotoImage(file=imgPATH+"hero_box.png").zoom(3)
         dialoguebox = PhotoImage(file=imgPATH+"dialogue.png")
-        self.dicimages={"." : sol_img1,"," : sol_img2,"`" : sol_img3,"´" : sol_img4,"@" : [hero_f,hero_b,hero_l,hero_r],"!" : pot_img3,"G" : ted_img,"W":ted_img,"O":sad_img,"B":ted_img,"D":ted_img,"s":bequille_img,"!":pot_img1,"c":pot_img3,"b":or1_img,"j":or2_img,"p":or5_img,"P":or10_img,"M":marchand_f,'inventory':hotbar, 'faim100' : faim100 , 'faim75' : faim75 , 'faim50' : faim50 , 'faim25' : faim25 , 'faim0': faim0, 'empty' : vide , 'herobox' : herobox , 'health' : vie,'dialogue' : dialoguebox.zoom(5), "dy":img_dyellow, "ye" : img_yellow, ">" : esc_up, "<" : esc_down}
+        self.dicimages={"." : sol_img1,"," : sol_img2,"`" : sol_img3,"´" : sol_img4,"@" : [hero_f,hero_b,hero_l,hero_r],"!" : pot_img3,"G" : ted_img,"W":ted_img,"O":sad_img,"B":ted_img,"D":ted_img,"s":bequille_img, "a" : img_stonelance,"!":pot_img1,"c":pot_img3,"b":or1_img,"j":or2_img,"p":or5_img,"P":or10_img,"M":marchand_f,'inventory':hotbar, 'faim100' : faim100 , 'faim75' : faim75 , 'faim50' : faim50 , 'faim25' : faim25 , 'faim0': faim0, 'empty' : vide , 'herobox' : herobox , 'health' : vie,'dialogue' : dialoguebox.zoom(5), "dy":img_dyellow, "ye" : img_yellow, ">" : esc_up, "<" : esc_down}
         #dictionnaire pour avoir les images en zoom dans l'inventaire
-        self.dicinventory={"@" : hero_f.zoom(2),"!" : pot_img3.zoom(2),"s":bequille_img.zoom(2),"!":pot_img1.zoom(2),"c":pot_img3.zoom(2),"b":or1_img.zoom(2),"j":or2_img.zoom(2),"p":or5_img.zoom(2),"P":or10_img.zoom(2)}
+        self.dicinventory={"@" : hero_f.zoom(2),"!" : pot_img3.zoom(2), "a" : img_stonelance.zoom(2),"s":bequille_img.zoom(2),"!":pot_img1.zoom(2),"c":pot_img3.zoom(2),"b":or1_img.zoom(2),"j":or2_img.zoom(2),"p":or5_img.zoom(2),"P":or10_img.zoom(2)}
         self.canvas.config(width=1000,height=800)
         self.voirMap()
         self.updategraph()
@@ -1031,12 +1032,6 @@ class Game(object):
         #affichage du niveau de vie
         for i in range (theGame().floor.hero.hp):
             self.canvas.create_image(130+32*(i-20*(i//20)),50+40*(i//20),image = self.dicimages['health'])
-            #if i <= 20:
-            #    self.canvas.create_image(130+32*i,50,image = self.dicimages['health'])
-            #elif i <= 40:
-            #    self.canvas.create_image(130+32*(i-21),90,image = self.dicimages['health'])
-            #else:
-            #    self.canvas.create_image(130+32*(i-41),130,image = self.dicimages['health'])
         #affichage des objets dans l'inventaire
         place = 0
         for e in theGame().floor.hero._inventory:
