@@ -1,5 +1,5 @@
 #!/usr/bin/python3
-#Projet Roguelike, par Nino Mulac, Ilane Pelletier, Arwen Duee-Moreau, Hugo Durand, Vaiki Martelli, et Kylian Girard
+#Roguelike project, by Nino Mulac, Ilane Pelletier, Arwen Duee-Moreau, Hugo Durand, Vaiki Martelli, and Kylian Girard
 #from time import sleep
 import random
 from typing import *
@@ -139,9 +139,9 @@ class Coord(object):
         if self==Coord(0,0):
             return Coord(0,0)
         cos=self.x/self.__len__()
-        if cos>math.sqrt(2):
+        if cos>1/math.sqrt(2):
             return Coord(-1,0)
-        if cos<-math.sqrt(2):
+        if cos<-1/math.sqrt(2):
             return Coord(1,0)
         if self.y>0:
             return Coord(0,-1)
@@ -199,11 +199,14 @@ class Element(object):
 
 class Creature(Element):
     "Element with hps and strength, movable in a Map"
-    def __init__(self,name,hp,abbrv=None,strength=1,defense=0,inventory=[],equips=[None,None,None,None],bourse=0,vitesse=1):
+    def __init__(self,name,hp,abbrv=None,strength=1,defense=0,inventory=[],equips=[None,None,None,None],bourse=0,vitesse=1,level=1):
         Element.__init__(self,name,abbrv)
-        self.hp=hp
-        self.strength=strength
-        self.defense=defense
+        self.hp=int(hp*(1.5**level))
+        self.hpmax=self.hp
+        self.level=level
+        self.strength=int(strength*(1.5**level))
+        self.defense=int(defense*(1.5**level))
+        self.xp=(self.hp+3*self.strength)*level
         self.bourse=bourse
         self._inventory=inventory
         self.equips=equips
@@ -213,13 +216,13 @@ class Creature(Element):
 
     def description(self) -> str:
         "Description of the Creature"
-        return Element.description(self)+"({})".format(self.hp)
+        return Element.description(self)+f"({self.hp})*{self.level}*"
 
     def meet(self,other) -> bool:
         "Encounter between two creatures: the second is attacked by the first"
         self.hp-=other.strength
         theGame().addMessage(f"The {other.name} hits the {self.description()}")
-        return False if self.hp>0 else True
+        return other.gainxp(self) if self.hp>0 else True
 
     def statuslose(self,status : Status):
         "Make the Creature be affected by its statuses"
@@ -244,6 +247,22 @@ class Creature(Element):
             self._inventory.append(equip)
             return True
         raise TypeError
+
+    def gainxp(self,creature):
+        "Killing a Creature makes you gain xp."
+        self.xp+= creature.xp
+        if self.xp>=5+5*self.level:
+            self.xp=0
+            self.levelup()
+        return False
+
+    def levelup(self):
+        "Level up : stats are increased"
+        self.hpmax+=2
+        self.level+=1
+        self.strength+=1
+        self.hp=self.hpmax
+        theGame().addMessage(f"Le {self.description} a gagné un niveau!(niveau {self.level})")
 
 class Pills(Element):
     "Pills are the game's money: we find them randomly in the game, they have a value according to their gold value."
@@ -294,13 +313,17 @@ class Enchant(object):
 
 class Hero(Creature):
     "The Hero, controled by the player in the game."
-    def __init__(self, name="Hero", hp=370, abbrv="@", strength=2):
+    def __init__(self, name="Hero", hp=370, abbrv="@", strength=2,satiete=20):
         Creature.__init__(self,name,hp,abbrv,strength)
         self.joie=50
         self.tristesse=50
         self.colere=50
         self.peur=50
         self.xp=0
+        self.satiete=satiete
+        self.tour=0
+        self.famine=False
+        self.satieteInit=satiete
 
     def description(self) -> str:
         "Short description of the Hero."
@@ -331,6 +354,29 @@ class Hero(Creature):
             raise ValueError("Tu l'as pas, tu peux pas l'utiliser!")
         if item.use(self):
             self._inventory.remove(item)
+
+    def levelup(self) -> None:
+        "Level up : stats are increased"
+        self.hpmax+=2
+        self.level+=1
+        self.strength+=1
+        self.hp=self.hpmax
+        theGame().addMessage(f"Bien joué! Bravo!! Tu es maintenant niveau {self.level}")
+
+    def food(self) -> None:
+        """The food level.
+        Decreases every 3 turns, from 20 to 0.
+        At 0, the hero loses hp each 3 turns."""
+        self.tour+=1
+        if self.satiete==0:
+            self.famine==True
+        if self.satiete>=20:
+            self.famine==False
+            self.satiete=20
+        if self.tour %3==0 and self.satiete>0:
+            self.satiete-=1
+        if self.tour %3==0 and self.famine==True:
+            self.hp-=1
 
 class Weapon(Equipment):
     "Equipable Equipment, increasing the creature's strength(Weapon: slot 0 in the Creature's equips)"
@@ -453,7 +499,6 @@ class Marchand(NPC):
 
 class Room(object):
     "Salle composant la Map, est définie par les coordonnées de ses coins"
-
     def __init__(self,c1:Coord,c2:Coord):
         self.c1=c1
         self.c2=c2
@@ -526,6 +571,7 @@ class Map(object):
             self._mat[self._elem.get(i).y][self._elem.get(i).x]=i.abbrv
         for i in self._rooms:
             i.decorate(self)
+        self.generateEscalier()
 
     def __repr__(self) -> str:
         return "\n".join(["".join([str(self._mat[n][k]) for k in range(len(self))]) for n in range(len(self))])+"\n"
@@ -583,7 +629,7 @@ class Map(object):
         "Puts an Element at the given Coord."
         self.checkCoord(coord)
         self.checkElement(element)
-        if self[coord]==self.empty or isinstance(self[coord],Element):
+        if self[coord]==self.empty or (isinstance(self[coord],Element)) or (isinstance(self[coord],Special_ground)):
             raise ValueError('Incorrect cell')
         if element in self:
             raise KeyError('Already placed')
@@ -697,6 +743,17 @@ class Map(object):
             if self.intersectNone(r):
                 self.addRoom(r)
 
+    def generateEscalier(self):
+        if self.get(self._rooms[0].center()+Coord(0,1))!= self.empty:
+            self.rm(self._rooms[0].center()+Coord(0,1))
+        self.put((self._rooms[0].center()+Coord(0,1)),Stairs("Monter",">",up=True))
+        salle_down= random.choice(self._rooms)
+        while salle_down == self._rooms[0]:
+            salle_down= random.choice(self._rooms)
+        if self.get(salle_down.center()+Coord(0,1)) not in self.listground:
+            self.rm(salle_down.center()+Coord(0,1))
+        self.put(salle_down.center()+Coord(0,1),Stairs("Descendre","<",up=False))
+
     def checkCoord(self,coord) -> None:
         "Method to check if an object is a Coord in the Map. Raises errors."
         if not(type(coord) is Coord):
@@ -706,12 +763,11 @@ class Map(object):
 
     def checkElement(self,elem) -> None:
         "Method to check if an object is an Element. Raises errors."
-        if not(isinstance(elem,Element)):
+        if not(isinstance(elem,Element)) and not(isinstance(elem,Special_ground)):
             raise TypeError('Not a Element')
 
     def moveAllMonsters(self) -> None:
-        """Moves all creatures from the map, except the Hero.
-        some monsters dance macarena, we have to fix this"""
+        """Moves all creatures from the map, except the Hero."""
         direction = [Coord(0,1),Coord(0,-1),Coord(1,0),Coord(-1,0),Coord(-1,1),Coord(-1,-1),Coord(1,1),Coord(1,-1)]
         for i in self._elem:
             if isinstance(i,Creature) and not (isinstance(i,Hero)):
@@ -739,30 +795,39 @@ class Map(object):
                         deplacement = random.choice(direction)
                         self.move(i,deplacement)
 
-class Escalier(Element):
-    def __init__(self,name,abbrv=None,up=None):
-        Element.__init__(self,name,abbrv="#")
+class Special_ground(object):
+    "Special ground affecting the hero"
+    def __init__(self,name,abbrv="#",effect=None):
+        self.name=name
+        self.abbrv=abbrv
+        self.effect=effect
+
+    def __repr__(self) -> str:
+        return self.abbrv
+
+class Stairs(Special_ground):
+    "Stairs allowing the Hero to change the stage he plays in."
+    def __init__(self,name,abbrv="#",effect=True,up=False):
+        Special_ground.__init__(self,name,abbrv,effect)
         self.up=up
 
     def meet(self,hero):
         "Changes the stage where the Hero is."
-        #theGame().etages contains stages
         if isinstance(hero,Hero):
-            if self.up==None:
-                if theGame().stage==10:
+            if self.up==True:
+                if theGame().stage==theGame().first_stage:
                     return
+                print("MONTE")
                 theGame().addMessage(f"{hero.name} prend les escaliers et monte.")
-                self.floor=self.etages[theGame().stage]
-                self.placescalier()
+                theGame().stage=theGame().stage+1
+                theGame().floor=theGame().etages[theGame().stage]
             else:
-                if theGame().stage==0:
-                    return
-                theGame().addMessage(f"{hero.name} prend les escaliers et monte.")
-                self.floor=self.etages[theGame().stage]
-                self.placescalier()
-
-    def placescalier(self,map: Map):
-        map.put(self.center(),self)
+                print("DESCEND")
+                theGame().addMessage(f"{hero.name} prend les escaliers et descend.")
+                print(theGame().stage)
+                theGame().stage=theGame().stage-1
+                theGame().floor=theGame().etages[theGame().stage]
+                #self.placescalier()
 
 class Game(object):
     """The Game class.
@@ -783,20 +848,25 @@ class Game(object):
                    1: [ Equipment("arc"),Equipment("potion","!",usage= lambda creature : teleport(creature,True)) ,Pills("or2","j",valeur_pillule=2)],
                    2: [ Equipment("chainmail"), Pills("or5","p",valeur_pillule=5) ],
                    3: [ Equipment("portoloin","w",usage= lambda creature : teleport(creature,False)), Pills("or10","J", valeur_pillule=10)]}
-    def __init__(self,hero=None,level=1,sizemap=20):
+    def __init__(self,hero=None,sizemap=20,stage=10):
         self.hero=Hero()
         if hero!=None:
             self.hero=hero
-        self.level=level
         self.floor=None
         self._message=[]
         self.seenmap=[[Map.empty for i in range(sizemap+2)] for k in range(sizemap+2)]
         self.sizemap=sizemap
         self.viewablemap=[[Map.empty for i in range(self.sizemap+2)] for k in range(self.sizemap+2)]
+        self.stage=stage
+        self.first_stage=self.stage
+        self.etages=[]
+        self.level=self.first_stage-self.stage+1
 
     def buildFloor(self,size=20) -> None:
         "Creates the Game's floor."
-        self.floor=Map(hero=self.hero,size=size)
+        for _ in range(10):
+            self.etages.append(Map(size))
+        self.floor=self.etages[0]
 
     def addMessage(self,msg) -> None:
         "Adds a message to be printed on the screen."
@@ -838,7 +908,7 @@ class Game(object):
         "Creates the dictionary of images,and binds actions to the Tk window, then creates the mainloop."
         genPATH=__file__
         imgPATH=genPATH[0:-12]+"images/"
-        hero_f=PhotoImage(file=imgPATH+"hero_face_i.png")
+        hero_f=PhotoImage(file=imgPATH+"hero_de_face.png")
         sol_img1=PhotoImage(file=imgPATH+"sol_1.png")
         sol_img2=PhotoImage(file=imgPATH+"sol_2.png")
         sol_img3=PhotoImage(file=imgPATH+"sol_3.png")
@@ -852,14 +922,32 @@ class Game(object):
         or2_img=PhotoImage(file=imgPATH+"or2.png")
         or5_img=PhotoImage(file=imgPATH+"or5.png")
         or10_img=PhotoImage(file=imgPATH+"or10.png")
-        marchand_f=PhotoImage(file=imgPATH+"marchand_de_face.png")#not used yet
-        marchand_f=PhotoImage(file=imgPATH+"marchand_de_face2.png")#not used yet
-        marchand_d=PhotoImage(file=imgPATH+"marchand_vers_droite.png")#not used yet
-        marchand_g=PhotoImage(file=imgPATH+"marchand_vers_gauche.png")#not used yet
-        marchand_sf=PhotoImage(file=imgPATH+"marchand_sucette_de_face.png")#not used yet
-        yellow_img=PhotoImage(file=imgPATH+"yellow.png")
-        dark_yellow_img=PhotoImage(file=imgPATH+"darkyellow.png")
-        self.dicimages={"." : sol_img1,"," : sol_img2,"`" : sol_img3,"´" : sol_img4,"@" : hero_f,"!" : pot_img3,"G" : ted_img,"W":ted_img,"O":sad_img,"B":ted_img,"D":ted_img,"s":bequille_img,"!":pot_img1,"c":pot_img3,"b":or1_img,"j":or2_img,"p":or5_img,"P":or10_img,"M":marchand_f,"ye":yellow_img,"dy":dark_yellow_img}
+        marchand_f=PhotoImage(file=imgPATH+"marchand_de_face.png")
+        marchand_f=PhotoImage(file=imgPATH+"marchand_de_face2.png")
+        marchand_d=PhotoImage(file=imgPATH+"marchand_vers_droite.png")
+        marchand_g=PhotoImage(file=imgPATH+"marchand_vers_gauche.png")
+        marchand_sf=PhotoImage(file=imgPATH+"marchand_sucette_de_face.png")
+
+        vide = PhotoImage(file=imgPATH+"empty.png").zoom(2)
+
+        #barre d'inventaire
+        hotbar = PhotoImage(file=imgPATH+"hotbar.png").zoom(2)
+        #niveaux satiete
+        faim100 = PhotoImage(file=imgPATH+"faim100.png").zoom(2)
+        faim75 = PhotoImage(file=imgPATH+"faim75.png").zoom(2)
+        faim50 = PhotoImage(file=imgPATH+"faim50.png").zoom(2)
+        faim25 = PhotoImage(file=imgPATH+"faim25.png").zoom(2)
+        faim0 = PhotoImage(file=imgPATH+"faim0.png").zoom(2)
+
+        vie =PhotoImage(file=imgPATH+"health.png")
+
+        herobox = PhotoImage(file=imgPATH+"hero_box.png").zoom(3)
+
+        dialoguebox = PhotoImage(file=imgPATH+"dialogue.png")
+
+        self.dicimages={"." : sol_img1,"," : sol_img2,"`" : sol_img3,"´" : sol_img4,"@" : hero_f,"!" : pot_img3,"G" : ted_img,"W":ted_img,"O":sad_img,"B":ted_img,"D":ted_img,"s":bequille_img,"!":pot_img1,"c":pot_img3,"b":or1_img,"j":or2_img,"p":or5_img,"P":or10_img,"M":marchand_f,'inventory':hotbar, 'faim100' : faim100 , 'faim75' : faim75 , 'faim50' : faim50 , 'faim25' : faim25 , 'faim0': faim0, 'empty' : vide , 'herobox' : herobox , 'health' : vie,'dialogue' : dialoguebox.zoom(5)}
+        #dictionnaire pour avoir les images en zoom dans l'inventaire
+        self.dicinventory={"@" : hero_f.zoom(2),"!" : pot_img3.zoom(2),"s":bequille_img.zoom(2),"!":pot_img1.zoom(2),"c":pot_img3.zoom(2),"b":or1_img.zoom(2),"j":or2_img.zoom(2),"p":or5_img.zoom(2),"P":or10_img.zoom(2)}
         self.canvas.config(width=1000,height=800)
         self.voirMap()
         self.updategraph()
@@ -871,6 +959,7 @@ class Game(object):
         "Makes an action according to the bind result"
         if event.char in self._actions:
             self._actions[event.char](self.floor.hero)
+        self.hero.food()
         self.floor.moveAllMonsters()
         self.voirMap()
         self.updategraph()
@@ -879,8 +968,7 @@ class Game(object):
         """Main graphic function.
         Displays the map on the canvas, using the images defined in initgraph.
         Then adds the minimap on the corner of the screen (place not defined yet, currently (600,600)).
-        And ends the game if the Hero is dead.
-        """
+        And ends the game if the Hero is dead."""
         y=0
         self.canvas.delete("all")
         #print(self.floor,"\n".join(["".join([str(self.mapvisible[n][k]) for k in range(self.sizemap)]) for n in range(self.sizemap)])+"\n") -> debug
@@ -911,8 +999,48 @@ class Game(object):
                     self.canvas.create_image(x,y,image=self.dicimages.get("ye"))
                 x+=4
             y+=4
-        self.canvas.create_text(85,120,text=self.readMessages(),font="Arial 16 italic",fill="blue")
-        self.canvas.create_text(85,60,text=self.floor.hero.description(),font="Arial 16 italic",fill="blue")
+        #truc pour l'interface
+        if theGame().floor.hero.hp>=1:
+            self.canvas.create_image(50 , 400 , image = self.dicimages['inventory'])
+            #affiche  le niveau de satiete grace a un cookie
+            satiete = theGame().floor.hero.satiete
+            if satiete >= 100:
+                self.canvas.create_image(750,150,image = self.dicimages['faim100'])
+            elif satiete >= 75:
+                self.canvas.create_image(750,150,image = self.dicimages['faim75'])
+            elif satiete >= 50:
+                self.canvas.create_image(750,150,image = self.dicimages['faim50'])
+            elif satiete >= 25:
+                self.canvas.create_image(750,150,image = self.dicimages['faim25'])
+            elif satiete > 0:
+                self.canvas.create_image(750,150,image = self.dicimages['faim0'])
+                #mettre un message comme quoi le niveau de nourriture est bas
+            else:
+                self.canvas.create_image(750,150,image = self.dicimages['empty'])
+                #mettre un message comme quoi le joueur doit manger
+            #petite fenetre qui va contenir le personnage
+            self.canvas.create_image(870, 160 , image = self.dicimages['herobox'])
+        #affichage du niveau de vie
+        for i in range (theGame().floor.hero.hp):
+            if i <= 20:
+                self.canvas.create_image(130+32*i,50,image = self.dicimages['health'])
+            elif i <= 40:
+                self.canvas.create_image(130+32*(i-21),90,image = self.dicimages['health'])
+            else:
+                self.canvas.create_image(130+32*(i-41),130,image = self.dicimages['health'])
+        #affichage des objets dans l'inventaire
+        place = 0
+        for e in theGame().floor.hero._inventory:
+            picture = (self.dicinventory.get(e.abbrv))
+            self.canvas.create_image(50,45+77*(place),image = picture)
+            place = place+1
+
+        #affichage des dialogue dans la boite de dialogue
+        self.canvas.create_image(420,710,image = self.dicimages['dialogue'])
+
+        self.canvas.create_text(500,750,text=self.readMessages(),font="Arial 25 italic",fill="white")
+        #inventaire ecrit: self.canvas.create_text(500,770,text=self.floor.hero.description(),font="Arial 16 italic",fill="white")
+        #fin de la boite de dialogue
         self.canvas.pack()
         if theGame().floor.hero.hp<1:
             self.endgame()
@@ -923,7 +1051,7 @@ class Game(object):
         self.buildFloor(20)
         self.fenetre=Tk()
         self.fenetre.title('DG')
-        #self.fenetre.attributes("-toolwindow",True)  #-fullscreen  #-toolwindow
+        self.fenetre.attributes("-fullscreen",True)
         self.fenetre.configure(background="pink")
         self.canvas=Canvas(self.fenetre,width=1200,height=800,background="black")
         #time.sleep(5)
