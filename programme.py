@@ -167,6 +167,21 @@ class Coord(object):
         "Middle of two Coords"
         return (self+other)//2
 
+    def facing(self):
+        "Function to "
+        cp=self.dirtrig()
+        if cp==Coord(0,0):
+            return 0
+        if cp==Coord(0,-1):
+            return 0
+        if cp==Coord(0,1):
+            return 1
+        if cp==Coord(1,0):
+            return 2
+        if cp==Coord(-1,0):
+            return 3
+
+
 class Status(object):
     "Status affecting a creature each turn, making her losing points from a stat"
     def __init__(self,name,effect,cible="hp",prb=1):
@@ -213,6 +228,7 @@ class Creature(Element):
         self.listeffects=[]
         self.dpl=[]
         self.vitesse=vitesse
+        self.facing=Coord(0,0)
 
     def description(self) -> str:
         "Description of the Creature"
@@ -222,7 +238,9 @@ class Creature(Element):
         "Encounter between two creatures: the second is attacked by the first"
         self.hp-=other.strength
         theGame().addMessage(f"The {other.name} hits the {self.description()}")
-        return other.gainxp(self) if self.hp>0 else True
+        if self.hp>0:
+            return other.gainxp()
+        return True
 
     def statuslose(self,status : Status):
         "Make the Creature be affected by its statuses"
@@ -313,7 +331,7 @@ class Enchant(object):
 
 class Hero(Creature):
     "The Hero, controled by the player in the game."
-    def __init__(self, name="Hero", hp=370, abbrv="@", strength=2,satiete=20):
+    def __init__(self, name="Hero", hp=37, abbrv="@", strength=2,satiete=20):
         Creature.__init__(self,name,hp,abbrv,strength)
         self.joie=50
         self.tristesse=50
@@ -498,7 +516,7 @@ class Marchand(NPC):
         [theGame().addMessage(i) for i in self.dialoguenon]
 
 class Room(object):
-    "Salle composant la Map, est définie par les coordonnées de ses coins"
+    "Room defined by her corner's coord"
     def __init__(self,c1:Coord,c2:Coord):
         self.c1=c1
         self.c2=c2
@@ -648,6 +666,9 @@ class Map(object):
     def move(self,element : Element,way : Coord) -> None:
         "Moves an element from a Coord to another relatively, meets the destination."
         coordarr=self.pos(element)+way
+        if (isinstance(element, Creature)):
+            element.facing=way
+
         if coordarr in self:
             if not coordarr in self._elem.values() and self._mat[coordarr.y][coordarr.x] in Map.listground:
                 self.groundize(self.pos(element))
@@ -831,7 +852,7 @@ class Stairs(Special_ground):
 
 class Game(object):
     """The Game class.
-    Please use theGame() to remain in the same game..."""
+    \nPlease use theGame() to remain in the same game..."""
     _actions={"z" : lambda hero : theGame().floor.move(hero,Coord(0,-1)),
               "s" : lambda hero : theGame().floor.move(hero,Coord(0,1)),
               "q" : lambda hero : theGame().floor.move(hero,Coord(-1,0)),
@@ -908,7 +929,10 @@ class Game(object):
         "Creates the dictionary of images,and binds actions to the Tk window, then creates the mainloop."
         genPATH=__file__
         imgPATH=genPATH[0:-12]+"images/"
-        hero_f=PhotoImage(file=imgPATH+"hero_de_face.png")
+        hero_f=PhotoImage(file=imgPATH+"hero_face_i.png")
+        hero_r=PhotoImage(file=imgPATH+"hero_right_i.png")
+        hero_b=PhotoImage(file=imgPATH+"hero_back_i.png")
+        hero_l=PhotoImage(file=imgPATH+"hero_left_i.png")
         sol_img1=PhotoImage(file=imgPATH+"sol_1.png")
         sol_img2=PhotoImage(file=imgPATH+"sol_2.png")
         sol_img3=PhotoImage(file=imgPATH+"sol_3.png")
@@ -927,25 +951,21 @@ class Game(object):
         marchand_d=PhotoImage(file=imgPATH+"marchand_vers_droite.png")
         marchand_g=PhotoImage(file=imgPATH+"marchand_vers_gauche.png")
         marchand_sf=PhotoImage(file=imgPATH+"marchand_sucette_de_face.png")
-
+        esc_up=PhotoImage(file=imgPATH+"escalier_up.png")
+        esc_down=PhotoImage(file=imgPATH+"escalier_down.png")
         vide = PhotoImage(file=imgPATH+"empty.png").zoom(2)
-
-        #barre d'inventaire
         hotbar = PhotoImage(file=imgPATH+"hotbar.png").zoom(2)
-        #niveaux satiete
         faim100 = PhotoImage(file=imgPATH+"faim100.png").zoom(2)
         faim75 = PhotoImage(file=imgPATH+"faim75.png").zoom(2)
         faim50 = PhotoImage(file=imgPATH+"faim50.png").zoom(2)
         faim25 = PhotoImage(file=imgPATH+"faim25.png").zoom(2)
         faim0 = PhotoImage(file=imgPATH+"faim0.png").zoom(2)
-
+        img_yellow=PhotoImage(file=imgPATH+"yellow.png")
+        img_dyellow=PhotoImage(file=imgPATH+"darkyellow.png")
         vie =PhotoImage(file=imgPATH+"health.png")
-
         herobox = PhotoImage(file=imgPATH+"hero_box.png").zoom(3)
-
         dialoguebox = PhotoImage(file=imgPATH+"dialogue.png")
-
-        self.dicimages={"." : sol_img1,"," : sol_img2,"`" : sol_img3,"´" : sol_img4,"@" : hero_f,"!" : pot_img3,"G" : ted_img,"W":ted_img,"O":sad_img,"B":ted_img,"D":ted_img,"s":bequille_img,"!":pot_img1,"c":pot_img3,"b":or1_img,"j":or2_img,"p":or5_img,"P":or10_img,"M":marchand_f,'inventory':hotbar, 'faim100' : faim100 , 'faim75' : faim75 , 'faim50' : faim50 , 'faim25' : faim25 , 'faim0': faim0, 'empty' : vide , 'herobox' : herobox , 'health' : vie,'dialogue' : dialoguebox.zoom(5)}
+        self.dicimages={"." : sol_img1,"," : sol_img2,"`" : sol_img3,"´" : sol_img4,"@" : [hero_f,hero_b,hero_l,hero_r],"!" : pot_img3,"G" : ted_img,"W":ted_img,"O":sad_img,"B":ted_img,"D":ted_img,"s":bequille_img,"!":pot_img1,"c":pot_img3,"b":or1_img,"j":or2_img,"p":or5_img,"P":or10_img,"M":marchand_f,'inventory':hotbar, 'faim100' : faim100 , 'faim75' : faim75 , 'faim50' : faim50 , 'faim25' : faim25 , 'faim0': faim0, 'empty' : vide , 'herobox' : herobox , 'health' : vie,'dialogue' : dialoguebox.zoom(5), "dy":img_dyellow, "ye" : img_yellow, ">" : esc_up, "<" : esc_down}
         #dictionnaire pour avoir les images en zoom dans l'inventaire
         self.dicinventory={"@" : hero_f.zoom(2),"!" : pot_img3.zoom(2),"s":bequille_img.zoom(2),"!":pot_img1.zoom(2),"c":pot_img3.zoom(2),"b":or1_img.zoom(2),"j":or2_img.zoom(2),"p":or5_img.zoom(2),"P":or10_img.zoom(2)}
         self.canvas.config(width=1000,height=800)
@@ -971,34 +991,22 @@ class Game(object):
         And ends the game if the Hero is dead."""
         y=0
         self.canvas.delete("all")
-        #print(self.floor,"\n".join(["".join([str(self.mapvisible[n][k]) for k in range(self.sizemap)]) for n in range(self.sizemap)])+"\n") -> debug
+        print(self.floor,"\n".join(["".join([str(self.viewablemap[n][k]) for k in range(self.sizemap)]) for n in range(self.sizemap)])+"\n") #-> debug
         for i in self.viewablemap:
             x=0
             for k in i:
                 if k!=Map.empty:
                     self.canvas.create_image(x*32,y*32,image=self.dicimages.get(self.floor.blankmap[int(y)][int(x)]))
                 if k in self.dicimages:
-                    self.canvas.create_image(x*32,y*32,image=self.dicimages.get(k))
+                    image=self.dicimages.get(k)
+                    if type(image) is list:
+                        self.canvas.create_image(x*32,y*32,image=image[self.hero.facing.facing()])
+                    else:
+                        self.canvas.create_image(x*32,y*32,image=self.dicimages.get(k))
                 else:
                     self.canvas.create_text(x*32,y*32,text=str(k),font="Arial 16")
                 x+=1
             y+=1
-        y=600
-        for i in self.seenmap:
-            x=800
-            for k in i:
-                if k!=Map.empty:
-                    self.canvas.create_image(x,y,image=self.dicimages.get("dy"))
-                x+=4
-            y+=4
-        y=600
-        for i in self.viewablemap:
-            x=800
-            for k in i:
-                if k!=Map.empty:
-                    self.canvas.create_image(x,y,image=self.dicimages.get("ye"))
-                x+=4
-            y+=4
         #truc pour l'interface
         if theGame().floor.hero.hp>=1:
             self.canvas.create_image(50 , 400 , image = self.dicimages['inventory'])
@@ -1022,19 +1030,36 @@ class Game(object):
             self.canvas.create_image(870, 160 , image = self.dicimages['herobox'])
         #affichage du niveau de vie
         for i in range (theGame().floor.hero.hp):
-            if i <= 20:
-                self.canvas.create_image(130+32*i,50,image = self.dicimages['health'])
-            elif i <= 40:
-                self.canvas.create_image(130+32*(i-21),90,image = self.dicimages['health'])
-            else:
-                self.canvas.create_image(130+32*(i-41),130,image = self.dicimages['health'])
+            self.canvas.create_image(130+32*(i-20*(i//20)),50+40*(i//20),image = self.dicimages['health'])
+            #if i <= 20:
+            #    self.canvas.create_image(130+32*i,50,image = self.dicimages['health'])
+            #elif i <= 40:
+            #    self.canvas.create_image(130+32*(i-21),90,image = self.dicimages['health'])
+            #else:
+            #    self.canvas.create_image(130+32*(i-41),130,image = self.dicimages['health'])
         #affichage des objets dans l'inventaire
         place = 0
         for e in theGame().floor.hero._inventory:
             picture = (self.dicinventory.get(e.abbrv))
             self.canvas.create_image(50,45+77*(place),image = picture)
             place = place+1
-
+        y=200
+        
+        for i in self.seenmap:
+            x=200
+            for k in i:
+                if k!=Map.empty:
+                    self.canvas.create_image(x,y,image=self.dicimages.get("dy"))
+                x+=4
+            y+=4
+        y=200
+        for i in self.viewablemap:
+            x=200
+            for k in i:
+                if k!=Map.empty:
+                    self.canvas.create_image(x,y,image=self.dicimages.get("ye"))
+                x+=4
+            y+=4
         #affichage des dialogue dans la boite de dialogue
         self.canvas.create_image(420,710,image = self.dicimages['dialogue'])
 
