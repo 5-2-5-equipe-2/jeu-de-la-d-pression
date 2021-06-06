@@ -526,8 +526,8 @@ class Amulet(Equipment):
 
 class NPC(Creature):
     "NPC creature, can talk when met."
-    def __init__(self, name, hp=100, abbrv="", strength=0, archer=None, actif=None):
-        Creature.__init__(self, name, hp, abbrv, strength, archer)
+    def __init__(self, name, hp=100, abbrv="", strength=0, defense=0,actif=None):
+        Creature.__init__(self, name, hp, abbrv, strength,defense,actif)
         self.actif=actif
 
     def meet(self, other) -> None:
@@ -539,13 +539,13 @@ class NPC(Creature):
 
 class Seller(NPC):
     "Particular NPC that can sell you Equipments or Actions(<not implemented yet)."
-    def __init__(self, name="Infirmière", hp=100, abbrv="", strength=0, archer=None, actif=["Bonjour, mon loulou. Quel age as tu? Ah oui tu es jeune!","Et qu'as tu dans des poches? Si tu as trouvé des pillules bleus ou jaunes ne les mangent pas!","Vient plutot me les donner, en échange je te donnerai des cookies ou des sucreries.","C'est d'accord?","Alors, as tu trouvé ce type de médicaments?"],dialoguenon=["Ce n'est pas grave loulou, reviens me voir si tu en trouves."],dialogueoui=["Ah oui effectivement, contre quoi veux tu me les échanger?"]):
-        NPC.__init__(self, name, hp, abbrv, strength, archer, actif)
+    def __init__(self, name="Infirmière", hp=100, abbrv="M", strength=0,defense=0, actif=["Bonjour, mon loulou. Quel age as tu? Ah oui tu es jeune!","Et qu'as tu dans des poches? Si tu as trouvé des pillules bleus ou jaunes ne les mangent pas!","Vient plutot me les donner, en échange je te donnerai des cookies ou des sucreries.","C'est d'accord?","Alors, as tu trouvé ce type de médicaments?"],dialoguenon=["Ce n'est pas grave loulou, reviens me voir si tu en trouves."],dialogueoui=["Ah oui effectivement, contre quoi veux tu me les échanger?"]):
+        NPC.__init__(self, name, hp, abbrv, strength,defense, actif)
         self.dialoguenon=dialoguenon
         self.dialogueoui=dialogueoui
         self.chariot=[]
         for i in range(5):
-            self.chariot.append(random.choice([Equipment("bonbon"),Equipment("cookie"),Equipment("sucette"),Weapon("béquille"),Equipment("chewing-gum")]))
+            self.chariot.append(random.choice([Equipment("bonbon"),Equipment("cookie"),Equipment("sucette"),Weapon("béquille",1,37845),Equipment("chewing-gum")]))
 
     def meet(self,creature) -> None:
         "Inits the dialogues and waits for the response with bind"
@@ -604,11 +604,15 @@ class Room(object):
             coord=self.randCoord()
         return coord
 
-    def decorate(self,map) -> None:
+    def decorate(self,map,Seller=True) -> None:
         "Adds random elements in the Room in the Map"
         map.put(self.randEmptyCoord(map),theGame().randEquipment())
         map.put(self.randEmptyCoord(map),theGame().randMonster())
         map.put(self.randEmptyCoord(map),theGame().randDecoration())
+        if Seller==True:# and not Seller in theGame().floor._elem():
+            print("...b")
+            map.put(random.choice(map._rooms).randEmptyCoord(map),theGame().randSeller())
+
 
 class Map(object):
     "Map of the Game, where Creatures live."
@@ -635,7 +639,7 @@ class Map(object):
         for i in self._elem.keys():
             self._mat[self._elem.get(i).y][self._elem.get(i).x]=i.abbrv
         for i in self._rooms:
-            i.decorate(self)
+            i.decorate(self,i==self._rooms[1])
         self.generateEscalier()
 
     def __repr__(self) -> str:
@@ -838,7 +842,7 @@ class Map(object):
         """Moves all creatures from the map, except the Hero."""
         direction = [Coord(0,1),Coord(0,-1),Coord(1,0),Coord(-1,0),Coord(-1,1),Coord(-1,-1),Coord(1,1),Coord(1,-1)]
         for i in self._elem:
-            if isinstance(i,Creature) and not (isinstance(i,Hero)):
+            if isinstance(i,Creature) and not (isinstance(i,Hero) or isinstance(i,NPC)):
                 i.creaturn()
                 if i.action>0:
                     i.action-=1
@@ -923,7 +927,7 @@ class Game(object):
                    2: [ Equipment("chainmail"), Pills("or5","p",valeur_pillule=5) ],
                    3: [ Equipment("portoloin","w",usage= lambda creature : teleport(creature,False)), Pills("or10","J", valeur_pillule=10)]}
     decorations = { 0:[Decoration("bed","Be",False)]}
-    def __init__(self,hero=None,sizemap=50,stage=10,fl=None):
+    def __init__(self,hero=None,sizemap=20,stage=10,fl=None):
         self.hero=Hero()
         if hero!=None:
             self.hero=hero
@@ -974,6 +978,9 @@ class Game(object):
     def randDecoration(self) -> Decoration:
         "Returns a random Equipment using randElement"
         return self.randElement(self.decorations)
+
+    def randSeller(self):
+        return Seller()
 
     def select(self,l : List[Equipment]) -> Equipment:
         """Prints the inventory and uses getch to choose which Equipment to use.
