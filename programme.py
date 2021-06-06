@@ -1,6 +1,6 @@
 #!/usr/bin/python3
+#                               MIND MAZE
 #Roguelike project, by Nino Mulac, Ilane Pelletier, Arwen Duee-Moreau, Hugo Durand, Vaiki Martelli, and Kylian Girard
-#from time import sleep
 import random
 from typing import *
 from tkinter import *
@@ -197,7 +197,7 @@ class Coord(object):
         return (self+other)//2
 
     def facing(self):
-        "Function to "
+        "Function to choose the correct "
         cp=self.dirtrig()
         if cp==Coord(0,0):
             return 0
@@ -240,10 +240,17 @@ class Element(object):
         "Warning! Not defined for Elements yet!"
         raise NotImplementedError("Not implemented yet")
 
+class Decoration(Element):
+    def __init__(self,name,abbrv=None,transparent=False):
+        Element.__init__(self,name,abbrv,transparent)
+
+    def meet(self,other):
+        return False
+
 class Creature(Element):
     "Element with hps and strength, movable in a Map"
     def __init__(self,name,hp,abbrv=None,strength=1,defense=0,inventory=[],equips=[None,None,None,None],bourse=0,vitesse=1,level=1,action=0):
-        Element.__init__(self,name,abbrv)
+        Element.__init__(self,name,abbrv,transparent=True)
         self.hp=int(hp*(1.5**level))
         self.hpmax=self.hp
         self.level=level
@@ -326,7 +333,7 @@ class Pills(Element):
 
 class Equipment(Element):
     "Pickable and usable Element"
-    def __init__(self,name,abbvr=None,usage=None,transparent=False,bourse=0,enchant=[]):
+    def __init__(self,name,abbvr=None,usage=None,transparent=True,bourse=0,enchant=[]):
         Element.__init__(self,name,abbvr,transparent)
         self.usage=usage
         self.enchant=enchant
@@ -530,7 +537,7 @@ class NPC(Creature):
                 for i in self.actif:
                     theGame().addMessage(self.name+" : "+ i)
 
-class Marchand(NPC):
+class Seller(NPC):
     "Particular NPC that can sell you Equipments or Actions(<not implemented yet)."
     def __init__(self, name="Infirmière", hp=100, abbrv="", strength=0, archer=None, actif=["Bonjour, mon loulou. Quel age as tu? Ah oui tu es jeune!","Et qu'as tu dans des poches? Si tu as trouvé des pillules bleus ou jaunes ne les mangent pas!","Vient plutot me les donner, en échange je te donnerai des cookies ou des sucreries.","C'est d'accord?","Alors, as tu trouvé ce type de médicaments?"],dialoguenon=["Ce n'est pas grave loulou, reviens me voir si tu en trouves."],dialogueoui=["Ah oui effectivement, contre quoi veux tu me les échanger?"]):
         NPC.__init__(self, name, hp, abbrv, strength, archer, actif)
@@ -601,6 +608,7 @@ class Room(object):
         "Adds random elements in the Room in the Map"
         map.put(self.randEmptyCoord(map),theGame().randEquipment())
         map.put(self.randEmptyCoord(map),theGame().randMonster())
+        map.put(self.randEmptyCoord(map),theGame().randDecoration())
 
 class Map(object):
     "Map of the Game, where Creatures live."
@@ -914,7 +922,8 @@ class Game(object):
                    1: [ Equipment("arc","a", usage=lambda creature: tir(False)),Equipment("potion","!",usage= lambda creature : teleport(creature,True)) ,Pills("or2","j",valeur_pillule=2)],
                    2: [ Equipment("chainmail"), Pills("or5","p",valeur_pillule=5) ],
                    3: [ Equipment("portoloin","w",usage= lambda creature : teleport(creature,False)), Pills("or10","J", valeur_pillule=10)]}
-    def __init__(self,hero=None,sizemap=20,stage=10,fl=None):
+    decorations = { 0:[Decoration("bed","Be",False)]}
+    def __init__(self,hero=None,sizemap=50,stage=10,fl=None):
         self.hero=Hero()
         if hero!=None:
             self.hero=hero
@@ -928,10 +937,10 @@ class Game(object):
         self.etages=[]
         self.level=self.first_stage-self.stage+1
 
-    def buildFloor(self,size=20) -> None:
+    def buildFloor(self) -> None:
         "Creates the Game's floor."
         for _ in range(10):
-            self.etages.append(Map(size))
+            self.etages.append(Map(self.sizemap,nbrooms=int(self.sizemap/2)))
         self.floor=self.etages[0]
 
     def addMessage(self,msg) -> None:
@@ -961,6 +970,10 @@ class Game(object):
     def randMonster(self) -> Creature:
         "Returns a random Creature using randElement"
         return self.randElement(self.monsters)
+
+    def randDecoration(self) -> Decoration:
+        "Returns a random Equipment using randElement"
+        return self.randElement(self.decorations)
 
     def select(self,l : List[Equipment]) -> Equipment:
         """Prints the inventory and uses getch to choose which Equipment to use.
@@ -1008,16 +1021,28 @@ class Game(object):
         faim50 = PhotoImage(file=imgPATH+"faim50.png").zoom(2)
         faim25 = PhotoImage(file=imgPATH+"faim25.png").zoom(2)
         faim0 = PhotoImage(file=imgPATH+"faim0.png").zoom(2)
-        img_yellow=PhotoImage(file=imgPATH+"yellow.png")
-        img_dyellow=PhotoImage(file=imgPATH+"darkyellow.png")
+        red=PhotoImage(file=imgPATH+"red.png")
+        dred=PhotoImage(file=imgPATH+"darkred.png")
+        gre=PhotoImage(file=imgPATH+"green.png")
+        dgre=PhotoImage(file=imgPATH+"darkgreen.png")
+        blu=PhotoImage(file=imgPATH+"blue.png")
+        dblu=PhotoImage(file=imgPATH+"darkblue.png")
+        yel=PhotoImage(file=imgPATH+"yellow.png")
+        dyel=PhotoImage(file=imgPATH+"darkyellow.png")
+        lig=PhotoImage(file=imgPATH+"lightblue.png")
+        dlig=PhotoImage(file=imgPATH+"darklightblue.png")
+        ora=PhotoImage(file=imgPATH+"orange.png")
+        dora=PhotoImage(file=imgPATH+"darkorange.png")
         vie =PhotoImage(file=imgPATH+"health.png")
         herobox = PhotoImage(file=imgPATH+"hero_box.png").zoom(3)
         dialoguebox = PhotoImage(file=imgPATH+"dialogue.png")
-        self.dicimages={"." : sol_img1,"," : sol_img2,"`" : sol_img3,"´" : sol_img4,"@" : [hero_f,hero_b,hero_l,hero_r],"!" : pot_img3,"G" : ted_img,"W":ted_img,"O":sad_img,"B":ted_img,"D":ted_img,"s":bequille_img, "a" : img_stonelance,"!":pot_img1,"c":pot_img3,"b":or1_img,"j":or2_img,"p":or5_img,"P":or10_img,"M":marchand_f,'inventory':hotbar, 'faim100' : faim100 , 'faim75' : faim75 , 'faim50' : faim50 , 'faim25' : faim25 , 'faim0': faim0, 'empty' : vide , 'herobox' : herobox , 'health' : vie,'dialogue' : dialoguebox.zoom(5), "dy":img_dyellow, "ye" : img_yellow, ">" : esc_up, "<" : esc_down,"u":chew_img,"g":gum_img}
+        self.dicimages={"." : sol_img1,"," : sol_img2,"`" : sol_img3,"´" : sol_img4,"@" : [hero_f,hero_b,hero_l,hero_r],"!" : pot_img3,"G" : ted_img,"W":ted_img,"O":sad_img,"B":ted_img,"D":ted_img,"s":bequille_img, "a" : img_stonelance,"!":pot_img1,"c":pot_img3,"b":or1_img,"j":or2_img,"p":or5_img,"P":or10_img,"M":marchand_f,'inventory':hotbar, 'faim100' : faim100 , 'faim75' : faim75 , 'faim50' : faim50 , 'faim25' : faim25 , 'faim0': faim0, 'empty' : vide , 'herobox' : herobox , 'health' : vie,'dialogue' : dialoguebox.zoom(5), ">" : esc_up, "<" : esc_down,"u":chew_img,"g":gum_img}
         #dictionnaire pour avoir les images en zoom dans l'inventaire
         self.dicinventory={"@" : hero_f.zoom(2),"!" : pot_img3.zoom(2), "a" : img_stonelance.zoom(2),"s":bequille_img.zoom(2),"!":pot_img1.zoom(2),"c":pot_img3.zoom(2),"b":or1_img.zoom(2),"j":or2_img.zoom(2),"p":or5_img.zoom(2),"P":or10_img.zoom(2),"g":gum_img.zoom(2)}
+        self.dicseen={"dy":dyel,"do":dora,"dl":dlig,"db":dblu,"dg":dgre,"dr":dred}
+        self.dicviewable={"ye":yel,"or":ora,"li":lig,"bl":blu,"gr":gre,"re":red}
         self.canvas.config(width=1000,height=800)
-        self.voirMap()
+        self.seeMap()
         self.updategraph()
         [self.fenetre.bind(i,self.gameturn) for i in self._actions]
         self.canvas.pack()
@@ -1029,7 +1054,7 @@ class Game(object):
             self._actions[event.char](self.floor.hero)
         self.hero.food()
         self.floor.moveAllMonsters()
-        self.voirMap()
+        self.seeMap()
         self.updategraph()
 
     def updategraph(self) -> None:
@@ -1045,7 +1070,6 @@ class Game(object):
             x=0
             for k in i:
                 if k!=Map.empty:
-                    print((x-poshero.x)*32+400,(y-poshero.y)*32+401)
                     self.canvas.create_image((x-poshero.x)*32+401,(y-poshero.y)*32+400,image=self.dicimages.get(self.floor.blankmap[int(y)][int(x)]))
                 if k in self.dicimages:
                     image=self.dicimages.get(k)
@@ -1093,7 +1117,7 @@ class Game(object):
             x=200
             for k in i:
                 if k!=Map.empty:
-                    self.canvas.create_image(x,y,image=self.dicimages.get("dy"))
+                    self.canvas.create_image(x,y,image=self.dicseen.get("dy"))
                 x+=4
             y+=4
         y=200
@@ -1101,7 +1125,7 @@ class Game(object):
             x=200
             for k in i:
                 if k!=Map.empty:
-                    self.canvas.create_image(x,y,image=self.dicimages.get("ye"))
+                    self.canvas.create_image(x,y,image=self.dicviewable.get("ye"))
                 x+=4
             y+=4
         #affichage des dialogue dans la boite de dialogue
@@ -1117,7 +1141,7 @@ class Game(object):
     def begingame(self):
         """Inits the Game, creates the Tk window and the Canvas, launches the mainloop by executing initgraph.
         \n Not perfect yet"""
-        self.buildFloor(20)
+        self.buildFloor()
         self.fenetre=Tk()
         self.fenetre.title('DG')
         self.fenetre.attributes("-fullscreen",True)
@@ -1145,7 +1169,7 @@ class Game(object):
         self.canvas.place(x=0,y=0)
         self.canvas.create_text(85,120,text="GAME OVER",font="Arial 16 italic",fill="blue")
 
-    def voirMap(self):
+    def seeMap(self):
         "Modifies the value of viewablemap and seenmap to match to the tiles viewable and seen."
         theta=0
         self.viewablemap=[[" " for i in range(self.sizemap+2)] for k in range(self.sizemap+2)]
@@ -1153,14 +1177,14 @@ class Game(object):
         while theta<=2*math.pi:
             r=0
             cv=Coord(0,0)
-            while r<=6 and (ch+cv in self.floor) and (self.floor[ch+cv] in Map.listground or self.floor[self.floor.hero]==ch+cv):
-                self.seenmap[(cv+ch).y][(cv+ch).x]=str(self.floor[cv+ch])
+            while r<=6 and (ch+cv in self.floor) and (self.floor[ch+cv] in Map.listground or self.floor[self.floor.hero]==ch+cv or (isinstance(self.floor[ch+cv],Element) and self.floor[ch+cv].transparent==True)):
+                self.seenmap[(cv+ch).y][(cv+ch).x]=self.floor[cv+ch]
                 self.viewablemap[(cv+ch).y][(cv+ch).x]=str(self.floor[cv+ch])
                 r+=0.2
                 cv=Coord(r,theta,True)
             cv=Coord(r+0.5,theta,True)
             if r<6 and ch+cv in self.floor:
-                self.seenmap[(cv+ch).y][(cv+ch).x]=str(self.floor[cv+ch])
+                self.seenmap[(cv+ch).y][(cv+ch).x]=self.floor[cv+ch]
                 self.viewablemap[(cv+ch).y][(cv+ch).x]=str(self.floor[cv+ch])
             theta+=math.pi/32
 
