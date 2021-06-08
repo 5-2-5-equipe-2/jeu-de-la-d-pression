@@ -1,13 +1,16 @@
 #!/usr/bin/python3
 #                               MIND MAZE
 #Roguelike project, by Nino Mulac, Ilane Pelletier, Arwen Duee-Moreau, Hugo Durand, Vaiki Martelli, and Kylian Girard
+from time import sleep
 import random
 from typing import *
 from tkinter import *
+from pynput.mouse import Button, Controller
 import copy
 import math
 
-def sign(x : float) -> int:
+
+def sign(x : float) -> Literal[-1,1]:
     "Returns the sign of a float"
     if x > 0:
         return 1
@@ -168,9 +171,9 @@ class Coord(object):
         if self==Coord(0,0):
             return Coord(0,0)
         cos=self.x/self.__len__()
-        if cos>1/math.sqrt(2):
+        if cos>1/math.sqrt(2)-0.1:
             return Coord(-1,0)
-        if cos<-1/math.sqrt(2):
+        if cos<-1/math.sqrt(2)+0.1:
             return Coord(1,0)
         if self.y>0:
             return Coord(0,-1)
@@ -197,7 +200,8 @@ class Coord(object):
         return (self+other)//2
 
     def facing(self):
-        "Function to choose the correct "
+        "Function to choose the correct direction of an image"
+        #cp=Coord(self.x,self.y/2)
         cp=self.dirtrig()
         if cp==Coord(0,0):
             return 0
@@ -246,6 +250,9 @@ class Decoration(Element):
 
     def meet(self,other):
         return False
+
+    #def __eq__(self,other):
+    #    return self.name==other.name
 
 class Creature(Element):
     "Element with hps and strength, movable in a Map"
@@ -299,8 +306,10 @@ class Creature(Element):
     def take(self,equip)-> True:
         "Taking an Equipment: we add it to the Creature's inventory"
         if isinstance(equip,Equipment):
-            self._inventory.append(equip)
-            return True
+            if  len(self._inventory)<=9:
+                self._inventory.append(equip)
+                return True
+            return False
         raise TypeError
 
     def gainxp(self,creature):
@@ -319,6 +328,24 @@ class Creature(Element):
         self.hp=self.hpmax
         theGame().addMessage(f"Le {self.description} a gagné un niveau!(niveau {self.level})")
 
+    def throw(unique):
+        "Throw the item"
+        Devant= theGame().floor._elem[theGame().floor.hero]+theGame().floor.hero.facing
+        i=5
+        while((Devant+theGame().floor.hero.facing in theGame().floor) and theGame().floor.get(Devant+theGame().floor.hero.facing)in theGame().floor.listground and i!=0):
+            Devant+=theGame().floor.hero.facing
+            i-=1
+        if ((Devant+theGame().floor.hero.facing) in theGame().floor) and isinstance(theGame().floor.get(Devant+theGame().floor.hero.facing),Creature):
+            theGame().floor.get(Devant+theGame().floor.hero.facing).action+=8
+        elif ((Devant+theGame().floor.hero.facing) in theGame().floor) and theGame().floor.get(Devant+theGame().floor.hero.facing)in theGame().floor.listground:
+            theGame().floor.put(Devant+theGame().floor.hero.facing, Used("used chewing-gum","u"))
+        elif ((Devant+theGame().floor.hero.facing) in theGame().floor) and isinstance(theGame().floor.get(Devant+theGame().floor.hero.facing), Equipment) or (Devant+theGame().floor.hero.facing) in theGame().floor and theGame().floor.get(Devant+theGame().floor.hero.facing)== theGame().floor.empty:
+        
+            theGame().floor.put(Devant,Used("used chewing-gum","u"))
+        else:
+            theGame().floor.put(Devant, Used("used chewing-gum","u"))
+        return unique
+
 class Pills(Element):
     "Pills are the game's money: we find them randomly in the game, they have a value according to their gold value."
     def __init__(self,name,abbvr=None,usage=None,transparent=True, valeur_pillule=0):
@@ -327,21 +354,26 @@ class Pills(Element):
 
     def meet(self, creature : Creature):
         "Meet a pill: we add her value to our bourse."
-        theGame().addMessage(f"You pick up a {self.name}")
+        theGame().addMessage(f"Tu as ramassé des médicaments (tu les mets dans tes poches)")
         creature.bourse+=self.valeur_pillule
         return True
 
 class Equipment(Element):
     "Pickable and usable Element"
-    def __init__(self,name,abbvr=None,usage=None,transparent=True,bourse=0,enchant=[]):
+    def __init__(self,name,abbvr=None,usage=None,transparent=True,bourse=0,enchant=[],f=False):
         Element.__init__(self,name,abbvr,transparent)
         self.usage=usage
         self.enchant=enchant
+        self.f=f
 
     def meet(self,creature) -> True:
         "Meet a equipment: add him to the creature's equipment"
-        theGame().addMessage(f"You pick up a {self.name}")
-        return Creature.take(creature,self)
+        a=Creature.take(creature,self)
+        if a:
+            theGame().addMessage(f"Tu as ramassé un{self.accord()}")
+        else:
+            theGame().addMessage(f"Mince, tu n'as plus de place!")
+        return a
 
     def use(self,creature) -> bool:
         "Use an equipment on a creature"
@@ -350,6 +382,9 @@ class Equipment(Element):
             return self.usage(creature)
         theGame().addMessage(f"The {self.name} is not usable")
         return False
+
+    def accord(self):
+        return f"e {self.name}" if self.f else f" {self.name}"
 
 class Used(Equipment):
    def __init__(self,name,abbrv="", usage=None):
@@ -442,10 +477,19 @@ class Hero(Creature):
         if self.tour %3==0 and self.famine==True:
             self.hp-=1
 
+    def sleep(self) -> None:
+        listdpl=[Coord(0,-1), Coord(-1,-1), Coord(-1,0), Coord(-1,1), Coord(0,1), Coord(1,1), Coord(1,0), Coord(1,-1)]
+        pos=theGame().floor.pos(self)
+        for i in listdpl:
+            if isinstance(theGame().floor.get(pos+i),Element) and theGame().floor.get(pos+i).name=="lit":
+                self.hp+=5
+                for _ in range(10):
+                    theGame().gameturn("<space>")
+
 class Weapon(Equipment):
     "Equipable Equipment, increasing the creature's strength(Weapon: slot 0 in the Creature's equips)"
-    def __init__(self, name, force, durabilite, abbrv="", usage=None):
-        Equipment.__init__(self, name, abbrv)
+    def __init__(self, name, force, durabilite, abbrv="", usage=None,f=False):
+        Equipment.__init__(self, name, abbrv,f=f)
         self.usage = usage
         self.force=force
         self.durabilite=durabilite
@@ -545,7 +589,7 @@ class Seller(NPC):
         self.dialogueoui=dialogueoui
         self.chariot=[]
         for i in range(5):
-            self.chariot.append(random.choice([Equipment("bonbon"),Equipment("cookie"),Equipment("sucette"),Weapon("béquille",1,37845),Equipment("chewing-gum")]))
+            self.chariot.append(theGame().randEquipment())
 
     def meet(self,creature) -> None:
         "Inits the dialogues and waits for the response with bind"
@@ -604,15 +648,19 @@ class Room(object):
             coord=self.randCoord()
         return coord
 
-    def decorate(self,map,Seller=True) -> None:
+    def decorate(self,map,seller=True) -> None:
         "Adds random elements in the Room in the Map"
         map.put(self.randEmptyCoord(map),theGame().randEquipment())
         map.put(self.randEmptyCoord(map),theGame().randMonster())
         map.put(self.randEmptyCoord(map),theGame().randDecoration())
-        if Seller==True:# and not Seller in theGame().floor._elem():
-            print("...b")
+        if seller==True:
             map.put(random.choice(map._rooms).randEmptyCoord(map),theGame().randSeller())
 
+class Attack(object):
+    "An attack: basically a tile with an animation"
+    def __init__(self,dmg : int,effect : List[Status]) -> None:
+        self.dmg=dmg
+        self.effect=effect
 
 class Map(object):
     "Map of the Game, where Creatures live."
@@ -632,6 +680,7 @@ class Map(object):
             self.hero=hero
         self._mat=[[self.empty for i in range(size)] for k in range(size)]
         self._elem={}
+        self._attacks={}
         self.generateRooms(self.nbrooms)
         self.reachAllRooms()
         self.blankmap=[[str(self._mat[j][i]) for i in range(len(self))] for j in range(len(self))]
@@ -911,22 +960,28 @@ class Game(object):
     """The Game class.
     \nPlease use theGame() to remain in the same game..."""
     _actions={"z" : lambda hero : theGame().floor.move(hero,Coord(0,-1)),
-              "s" : lambda hero : theGame().floor.move(hero,Coord(0,1)),
+              "a" : lambda hero : theGame().floor.move(hero,Coord(-1,-1)),
               "q" : lambda hero : theGame().floor.move(hero,Coord(-1,0)),
+              "w" : lambda hero : theGame().floor.move(hero,Coord(-1,1)),
+              "x" : lambda hero : theGame().floor.move(hero,Coord(0,1)),
+              "c" : lambda hero : theGame().floor.move(hero,Coord(1,1)),
               "d" : lambda hero : theGame().floor.move(hero,Coord(1,0)),
+              "e" : lambda hero : theGame().floor.move(hero,Coord(1,-1)),
               "i" : lambda hero : theGame().addMessage(hero.fullDescription()),
+              "r" : lambda hero : theGame().hero.sleep(),
               "k" : lambda hero : hero.kill(),
               "<space>" : lambda hero : theGame().tour(),
               "u" : lambda hero : hero.use(theGame().select(hero._inventory))
+              #"j" : lambda hero : hero.jet(theGame().select(hero._inventory))
               }
     monsters = { 0: [ Creature("Goblin",4), Creature("Bat",2,"W") ],
                  1: [ Creature("Ork",6,strength=2), Creature("Blob",10) ],
                  5: [ Creature("Dragon",20,strength=3) ] }
-    equipments = { 0: [ Weapon("sword",3,37,"s"),Equipment("gum","g", usage=lambda creature: jet(True)) ,Equipment("potion","!",usage=lambda creature : heal(creature)),Pills("or1","b",valeur_pillule=1)],
-                   1: [ Equipment("arc","a", usage=lambda creature: tir(False)),Equipment("potion","!",usage= lambda creature : teleport(creature,True)) ,Pills("or2","j",valeur_pillule=2)],
-                   2: [ Equipment("chainmail"), Pills("or5","p",valeur_pillule=5) ],
+    equipments = { 0: [ Weapon("épée",3,37,"s",f=True),Equipment("gum","g", usage=lambda creature: jet(True)) ,Equipment("potion","!",usage=lambda creature : heal(creature),f=True),Pills("or1","b",valeur_pillule=1)],
+                   1: [ Equipment("lance-pierre","a", usage=lambda creature: tir(False)),Equipment("potion","!",usage= lambda creature : teleport(creature,True),f=True) ,Pills("or2","j",valeur_pillule=2)],
+                   2: [ Armor("plaid",5,376506), Pills("or5","p",valeur_pillule=5) ],
                    3: [ Equipment("portoloin","w",usage= lambda creature : teleport(creature,False)), Pills("or10","J", valeur_pillule=10)]}
-    decorations = { 0:[Decoration("bed","Be",False)]}
+    decorations = { 0:[Decoration("lit","Be",False)]}
     def __init__(self,hero=None,sizemap=20,stage=10,fl=None):
         self.hero=Hero()
         if hero!=None:
@@ -994,10 +1049,18 @@ class Game(object):
         "Creates the dictionary of images,and binds actions to the Tk window, then creates the mainloop."
         genPATH=__file__
         imgPATH=genPATH[0:-12]+"images/"
-        hero_f=PhotoImage(file=imgPATH+"hero_face_i.png")
-        hero_r=PhotoImage(file=imgPATH+"hero_right_i.png")
-        hero_b=PhotoImage(file=imgPATH+"hero_back_i.png")
-        hero_l=PhotoImage(file=imgPATH+"hero_left_i.png")
+        hero_fi=PhotoImage(file=imgPATH+"hero_face_i.png")
+        hero_ri=PhotoImage(file=imgPATH+"hero_right_i.png")
+        hero_bi=PhotoImage(file=imgPATH+"hero_back_i.png")
+        hero_li=PhotoImage(file=imgPATH+"hero_left_i.png")
+        hero_fw1=PhotoImage(file=imgPATH+"hero_face_w1.png")
+        hero_rw1=PhotoImage(file=imgPATH+"hero_right_w1.png")
+        hero_bw1=PhotoImage(file=imgPATH+"hero_back_w1.png")
+        hero_lw1=PhotoImage(file=imgPATH+"hero_left_w1.png")
+        hero_fw2=PhotoImage(file=imgPATH+"hero_face_w2.png")
+        hero_rw2=PhotoImage(file=imgPATH+"hero_right_w2.png")
+        hero_bw2=PhotoImage(file=imgPATH+"hero_back_w2.png")
+        hero_lw2=PhotoImage(file=imgPATH+"hero_left_w2.png")
         sol_img1=PhotoImage(file=imgPATH+"sol_1.png")
         sol_img2=PhotoImage(file=imgPATH+"sol_2.png")
         sol_img3=PhotoImage(file=imgPATH+"sol_3.png")
@@ -1043,9 +1106,10 @@ class Game(object):
         vie =PhotoImage(file=imgPATH+"health.png")
         herobox = PhotoImage(file=imgPATH+"hero_box.png").zoom(3)
         dialoguebox = PhotoImage(file=imgPATH+"dialogue.png")
-        self.dicimages={"." : sol_img1,"," : sol_img2,"`" : sol_img3,"´" : sol_img4,"@" : [hero_f,hero_b,hero_l,hero_r],"!" : pot_img3,"G" : ted_img,"W":ted_img,"O":sad_img,"B":ted_img,"D":ted_img,"s":bequille_img, "a" : img_stonelance,"!":pot_img1,"c":pot_img3,"b":or1_img,"j":or2_img,"p":or5_img,"P":or10_img,"M":marchand_f,'inventory':hotbar, 'faim100' : faim100 , 'faim75' : faim75 , 'faim50' : faim50 , 'faim25' : faim25 , 'faim0': faim0, 'empty' : vide , 'herobox' : herobox , 'health' : vie,'dialogue' : dialoguebox.zoom(5), ">" : esc_up, "<" : esc_down,"u":chew_img,"g":gum_img}
+        self.dicimages={"." : sol_img1,"," : sol_img2,"`" : sol_img3,"´" : sol_img4,"@" : [hero_fi,hero_bi,hero_li,hero_ri],"!" : pot_img3,"G" : ted_img,"W":ted_img,"O":sad_img,"B":ted_img,"D":ted_img,"s":bequille_img, "a" : img_stonelance,"!":pot_img1,"c":pot_img3,"b":or1_img,"j":or2_img,"p":or5_img,"P":or10_img,"M":marchand_f,'inventory':hotbar, 'faim100' : faim100 , 'faim75' : faim75 , 'faim50' : faim50 , 'faim25' : faim25 , 'faim0': faim0, 'empty' : vide , 'herobox' : herobox , 'health' : vie,'dialogue' : dialoguebox.zoom(5), ">" : esc_up, "<" : esc_down,"u":chew_img,"g":gum_img}
+        self.dicanim={"@":[hero_fw1,hero_rw1,hero_bw1,hero_lw1,hero_fw2,hero_rw2,hero_bw2,hero_lw2]}
         #dictionnaire pour avoir les images en zoom dans l'inventaire
-        self.dicinventory={"@" : hero_f.zoom(2),"!" : pot_img3.zoom(2), "a" : img_stonelance.zoom(2),"s":bequille_img.zoom(2),"!":pot_img1.zoom(2),"c":pot_img3.zoom(2),"b":or1_img.zoom(2),"j":or2_img.zoom(2),"p":or5_img.zoom(2),"P":or10_img.zoom(2),"g":gum_img.zoom(2)}
+        self.dicinventory={"@" : hero_fi.zoom(2),"!" : pot_img3.zoom(2), "a" : img_stonelance.zoom(2),"s":bequille_img.zoom(2),"!":pot_img1.zoom(2),"c":pot_img3.zoom(2),"b":or1_img.zoom(2),"j":or2_img.zoom(2),"p":or5_img.zoom(2),"P":or10_img.zoom(2),"g":gum_img.zoom(2)}
         self.dicseen={"dy":dyel,"do":dora,"dl":dlig,"db":dblu,"dg":dgre,"dr":dred}
         self.dicviewable={"ye":yel,"or":ora,"li":lig,"bl":blu,"gr":gre,"re":red}
         self.canvas.config(width=1000,height=800)
@@ -1057,7 +1121,7 @@ class Game(object):
 
     def gameturn(self,event) -> None:
         "Makes an action according to the bind result"
-        if event.char in self._actions:
+        if isinstance(event,Event) and event.char in self._actions:
             self._actions[event.char](self.floor.hero)
         self.hero.food()
         self.floor.moveAllMonsters()
@@ -1118,18 +1182,18 @@ class Game(object):
             picture = (self.dicinventory.get(e.abbrv))
             self.canvas.create_image(50,45+78*(place),image = picture)
             place = place+1
-        y=200
+        y=650
         
         for i in self.seenmap:
-            x=200
+            x=800
             for k in i:
                 if k!=Map.empty:
                     self.canvas.create_image(x,y,image=self.dicseen.get("dy"))
                 x+=4
             y+=4
-        y=200
+        y=650
         for i in self.viewablemap:
-            x=200
+            x=800
             for k in i:
                 if k!=Map.empty:
                     self.canvas.create_image(x,y,image=self.dicviewable.get("ye"))
@@ -1149,6 +1213,7 @@ class Game(object):
         """Inits the Game, creates the Tk window and the Canvas, launches the mainloop by executing initgraph.
         \n Not perfect yet"""
         self.buildFloor()
+        #self.mouse=Controller()
         self.fenetre=Tk()
         self.fenetre.title('DG')
         self.fenetre.attributes("-fullscreen",True)
@@ -1157,16 +1222,16 @@ class Game(object):
         #time.sleep(5)
         self.canvas.place(x=0,y=0)
         self.canvas.create_text(85,120,text="NEW GAME",font="Arial 16 italic",fill="blue")
-        self.bouton_quitter = Button(self.fenetre, text='Quitter', command=self.fenetre.destroy) #util pour le fullscreen
-        self.bouton_quitter.place(x=1200,y=800)
+        #self.bouton_quitter = Button(self.fenetre, text='Quitter', command=self.fenetre.destroy) #util pour le fullscreen
+        #self.bouton_quitter.place(x=1200,y=800)
         self.canvas.delete("all")
         self.canvas.destroy()
-        #bouton_jouer = Button(self.fenetre,text='Jouer',command=self.playthegame)
+        #bouton_jouer = Button(self.fenetre,text='Jouer',command=self.beginplay)
         #bouton_jouer.place(x=1500,y=800)
         self.canvas=Canvas(self.fenetre,width=1200,height=800,background="black")
         self.canvas.place(x=0,y=0)
-        bouton_quitter = Button(self.fenetre, text='Quitter', command=self.fenetre.destroy)
-        bouton_quitter.place(x=1200,y=800)
+        #bouton_quitter = Button(self.fenetre, text='Quitter', command=self.fenetre.destroy)
+        #bouton_quitter.place(x=1200,y=800)
         self.initgraph()
 
     def endgame(self) -> None:
