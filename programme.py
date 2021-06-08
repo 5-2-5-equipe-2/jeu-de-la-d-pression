@@ -224,14 +224,14 @@ class Status(object):
 
 class Element(object):
     "Basic Element of the roguelike"
-
-    def __init__(self,name,abbrv=None,transparent=False):
+    def __init__(self,name,abbrv=None,transparent=False,f=False):
         self.name=name
         self.transparent=transparent
         if abbrv==None:
             self.abbrv=name[0]
         else:
             self.abbrv=abbrv
+        self.f=f
 
     def __repr__(self) -> str:
         return self.abbrv
@@ -243,6 +243,9 @@ class Element(object):
     def meet(self,hero):
         "Warning! Not defined for Elements yet!"
         raise NotImplementedError("Not implemented yet")
+
+    def accord(self):
+        return f"e {self.name}" if self.f else f" {self.name}"
 
 class Decoration(Element):
     def __init__(self,name,abbrv=None,transparent=False):
@@ -256,7 +259,7 @@ class Decoration(Element):
 
 class Creature(Element):
     "Element with hps and strength, movable in a Map"
-    def __init__(self,name,hp,abbrv=None,strength=1,defense=0,inventory=[],equips=[None,None,None,None],bourse=0,vitesse=1,level=1,action=0):
+    def __init__(self,name,hp,abbrv=None,strength=1,defense=0,inventory=[],equips=[None,None,None,None],bourse=0,vitesse=1,level=1,action=0,power=None):
         Element.__init__(self,name,abbrv,transparent=True)
         self.hp=int(hp*(1.5**level))
         self.hpmax=self.hp
@@ -272,15 +275,18 @@ class Creature(Element):
         self.vitesse=vitesse
         self.facing=Coord(0,0)
         self.action=action
+        self.power=power
 
     def description(self) -> str:
         "Description of the Creature"
         return Element.description(self)+f"({self.hp})*{self.level}*"
 
     def meet(self,other) -> bool:
-        "Encounter between two creatures: the first(self) is attacked by the second(other"
+        "Encounter between two creatures: the first(self) is attacked by the second(other)"
         self.hp-=(other.strength-random.randint(0,self.defense))
-        theGame().addMessage(f"The {other.name} hits the {self.description()}")
+        if other.power!=None:
+            self.listeffects.append(other.power)
+        theGame().addMessage(f"Le {other.name} hits le {self.description()}")
         if self.hp<=0:
             return other.gainxp(self)
         return False
@@ -328,23 +334,22 @@ class Creature(Element):
         self.hp=self.hpmax
         theGame().addMessage(f"Le {self.description} a gagné un niveau!(niveau {self.level})")
 
-    def throw(unique):
+    def throw(self,equip) -> bool:
         "Throw the item"
-        Devant= theGame().floor._elem[theGame().floor.hero]+theGame().floor.hero.facing
+        devant= theGame().floor._elem[self]+self.facing
         i=5
-        while((Devant+theGame().floor.hero.facing in theGame().floor) and theGame().floor.get(Devant+theGame().floor.hero.facing)in theGame().floor.listground and i!=0):
-            Devant+=theGame().floor.hero.facing
+        while((devant+self.facing in theGame().floor) and theGame().floor.get(devant+self.facing)in Map.listground and i!=0):
+            devant+=self.facing
             i-=1
-        if ((Devant+theGame().floor.hero.facing) in theGame().floor) and isinstance(theGame().floor.get(Devant+theGame().floor.hero.facing),Creature):
-            theGame().floor.get(Devant+theGame().floor.hero.facing).action+=8
-        elif ((Devant+theGame().floor.hero.facing) in theGame().floor) and theGame().floor.get(Devant+theGame().floor.hero.facing)in theGame().floor.listground:
-            theGame().floor.put(Devant+theGame().floor.hero.facing, Used("used chewing-gum","u"))
-        elif ((Devant+theGame().floor.hero.facing) in theGame().floor) and isinstance(theGame().floor.get(Devant+theGame().floor.hero.facing), Equipment) or (Devant+theGame().floor.hero.facing) in theGame().floor and theGame().floor.get(Devant+theGame().floor.hero.facing)== theGame().floor.empty:
-        
-            theGame().floor.put(Devant,Used("used chewing-gum","u"))
+        if ((devant+self.facing) in theGame().floor) and isinstance(theGame().floor.get(devant+self.facing),Creature):
+            theGame().floor.get(devant+self.facing).action+=8
+        elif ((devant+self.facing) in theGame().floor) and theGame().floor.get(devant+self.facing)in Map.listground:
+            theGame().floor.put(devant+theGame().floor.hero.facing, equip if equip.used=="idem" else equip.used)
+        elif ((devant+self.facing) in theGame().floor) and (isinstance(theGame().floor.get(devant+self.facing), Equipment) or theGame().floor.get(devant+self.facing)==Map.empty):
+            theGame().floor.put(devant,equip if equip.used=="idem" else equip.used)
         else:
-            theGame().floor.put(Devant, Used("used chewing-gum","u"))
-        return unique
+            theGame().floor.put(devant,equip if equip.used=="idem" else equip.used)
+        self._inventory.remove(equip)
 
 class Pills(Element):
     "Pills are the game's money: we find them randomly in the game, they have a value according to their gold value."
@@ -360,11 +365,12 @@ class Pills(Element):
 
 class Equipment(Element):
     "Pickable and usable Element"
-    def __init__(self,name,abbvr=None,usage=None,transparent=True,bourse=0,enchant=[],f=False):
+    def __init__(self,name,abbvr=None,usage=None,transparent=True,enchant=[],f=False,used=None):
         Element.__init__(self,name,abbvr,transparent)
         self.usage=usage
         self.enchant=enchant
         self.f=f
+        self.used=used
 
     def meet(self,creature) -> True:
         "Meet a equipment: add him to the creature's equipment"
@@ -382,9 +388,6 @@ class Equipment(Element):
             return self.usage(creature)
         theGame().addMessage(f"The {self.name} is not usable")
         return False
-
-    def accord(self):
-        return f"e {self.name}" if self.f else f" {self.name}"
 
 class Used(Equipment):
    def __init__(self,name,abbrv="", usage=None):
@@ -489,7 +492,7 @@ class Hero(Creature):
 class Weapon(Equipment):
     "Equipable Equipment, increasing the creature's strength(Weapon: slot 0 in the Creature's equips)"
     def __init__(self, name, force, durabilite, abbrv="", usage=None,f=False):
-        Equipment.__init__(self, name, abbrv,f=f)
+        Equipment.__init__(self, name, abbrv,f=f,used="idem")
         self.usage = usage
         self.force=force
         self.durabilite=durabilite
@@ -514,7 +517,7 @@ class Weapon(Equipment):
 class Armor(Equipment):
     "Equipable Equipment, increasing the creature's defense(Armor: slot 1 in the Creature's equips)"
     def __init__(self, name, defense, durabilite, abbrv="", usage=None):
-        Equipment.__init__(self, name, abbrv)
+        Equipment.__init__(self, name, abbrv,used="idem")
         self.usage = usage
         self.defense=defense
         self.durabilite=durabilite
@@ -539,7 +542,7 @@ class Armor(Equipment):
 class Amulet(Equipment):
     "Equipable Equipment, increasing the hero's defense, strength, or other things if needed(Amulet: slot 2 in the Hero's equips)"
     def __init__(self,name,defense=0,force=0,courage=0,abbrv="",usage=None):
-        Equipment.__init__(self, name, abbrv)
+        Equipment.__init__(self, name, abbrv,used="idem")
         self.usage = usage
         self.defense=defense
         self.force=force
@@ -745,6 +748,8 @@ class Map(object):
 
     def put(self,coord : Coord,element : Element) -> None:
         "Puts an Element at the given Coord."
+        if type(coord) is type(None) or type(element) is type(None):
+            return 
         self.checkCoord(coord)
         self.checkElement(element)
         if self[coord]==self.empty or (isinstance(self[coord],Element)) or (isinstance(self[coord],Special_ground)):
@@ -971,13 +976,12 @@ class Game(object):
               "r" : lambda hero : theGame().hero.sleep(),
               "k" : lambda hero : hero.kill(),
               "<space>" : lambda hero : theGame().tour(),
-              "u" : lambda hero : hero.use(theGame().select(hero._inventory))
-              #"j" : lambda hero : hero.jet(theGame().select(hero._inventory))
-              }
+              "u" : lambda hero : hero.use(theGame().select(hero._inventory)),
+              "j" : lambda hero : hero.throw(theGame().select(hero._inventory))}
     monsters = { 0: [ Creature("Goblin",4), Creature("Bat",2,"W") ],
                  1: [ Creature("Ork",6,strength=2), Creature("Blob",10) ],
                  5: [ Creature("Dragon",20,strength=3) ] }
-    equipments = { 0: [ Weapon("épée",3,37,"s",f=True),Equipment("gum","g", usage=lambda creature: jet(True)) ,Equipment("potion","!",usage=lambda creature : heal(creature),f=True),Pills("or1","b",valeur_pillule=1)],
+    equipments = { 0: [ Weapon("épée",3,37,"s",f=True),Equipment("gum","g", usage=lambda creature: jet(True),used=Used("used chewing-gum","u")) ,Equipment("potion","!",usage=lambda creature : heal(creature),f=True),Pills("or1","b",valeur_pillule=1)],
                    1: [ Equipment("lance-pierre","a", usage=lambda creature: tir(False)),Equipment("potion","!",usage= lambda creature : teleport(creature,True),f=True) ,Pills("or2","j",valeur_pillule=2)],
                    2: [ Armor("plaid",5,376506), Pills("or5","p",valeur_pillule=5) ],
                    3: [ Equipment("portoloin","w",usage= lambda creature : teleport(creature,False)), Pills("or10","J", valeur_pillule=10)]}
