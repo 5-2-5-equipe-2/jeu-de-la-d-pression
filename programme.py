@@ -1,14 +1,16 @@
 #!/usr/bin/python3
 #                               MIND MAZE
 #Roguelike project, by Nino Mulac, Ilane Pelletier, Arwen Duee-Moreau, Hugo Durand, Vaiki Martelli, and Kylian Girard
-from time import sleep
+from time import sleep,time
 import random
 from typing import *
 from tkinter import *
-from pynput.mouse import Button, Controller
+from pynput.mouse import Controller
 import copy
 import math
-
+def nonefunc(x=0,y=0,z=0):
+    "test"
+    return
 
 def sign(x : float) -> Literal[-1,1]:
     "Returns the sign of a float"
@@ -81,14 +83,17 @@ def jet(unique):
     return unique
 
 class Coord(object):
-    "Vec2D object, created by rectangular or polar coordinates"
-    def __init__(self,x : int ,y : int ,angle=False):
+    "Vec2D object, created by rectangular or polar coordinates(with int coords in normal condition, but if broken, can have floats.(used for the moving anims)"
+    def __init__(self,x : int ,y : int ,angle=False,broken=False):
         if not(angle):
-            self.x=int(x)
-            self.y=int(y)
+            self.x=x
+            self.y=y
         else:
-            self.x=int(x*math.cos(y))
-            self.y=int(x*math.sin(y))
+            self.x=x*math.cos(y)
+            self.y=x*math.sin(y)
+        if not(broken):
+            self.x=int(self.x)
+            self.y=int(self.y)
 
     def __repr__(self) -> str:
         return "<"+str(self.x)+","+str(self.y)+">"
@@ -161,6 +166,9 @@ class Coord(object):
             return len(self)>=len(other)
         if (type(other) is int) or (type(other) is float):
             return len(self)>=other
+
+    def __index__(self) -> tuple:
+        return (self.x,self.y)
 
     def distance(self,other) -> float:
         "Diagonal distance between two points"
@@ -334,7 +342,7 @@ class Creature(Element):
         self.hp=self.hpmax
         theGame().addMessage(f"Le {self.description} a gagné un niveau!(niveau {self.level})")
 
-    def throw(self,equip) -> bool:
+    def throw(self,equip):
         "Throw the item"
         devant= theGame().floor._elem[self]+self.facing
         i=5
@@ -366,15 +374,14 @@ class Pills(Element):
 class Equipment(Element):
     "Pickable and usable Element"
     def __init__(self,name,abbvr=None,usage=None,transparent=True,enchant=[],f=False,used=None):
-        Element.__init__(self,name,abbvr,transparent)
+        Element.__init__(self,name,abbvr,transparent,f)
         self.usage=usage
         self.enchant=enchant
-        self.f=f
         self.used=used
 
-    def meet(self,creature) -> True:
+    def meet(self,creature : Creature) -> True:
         "Meet a equipment: add him to the creature's equipment"
-        a=Creature.take(creature,self)
+        a=creature.take(self)
         if a:
             theGame().addMessage(f"Tu as ramassé un{self.accord()}")
         else:
@@ -661,7 +668,7 @@ class Room(object):
 
 class Attack(object):
     "An attack: basically a tile with an animation"
-    def __init__(self,dmg : int,effect : List[Status]) -> None:
+    def __init__(self,name,dmg : int,turns : int,effect : List[Status]) -> None:
         self.dmg=dmg
         self.effect=effect
 
@@ -771,9 +778,8 @@ class Map(object):
     def move(self,element : Element,way : Coord) -> None:
         "Moves an element from a Coord to another relatively, meets the destination."
         coordarr=self.pos(element)+way
-        if (isinstance(element, Creature)):
+        if isinstance(element, Creature):
             element.facing=way
-
         if coordarr in self:
             if not coordarr in self._elem.values() and self._mat[coordarr.y][coordarr.x] in Map.listground:
                 self.groundize(self.pos(element))
@@ -985,6 +991,10 @@ class Game(object):
                    1: [ Equipment("lance-pierre","a", usage=lambda creature: tir(False)),Equipment("potion","!",usage= lambda creature : teleport(creature,True),f=True) ,Pills("or2","j",valeur_pillule=2)],
                    2: [ Armor("plaid",5,376506), Pills("or5","p",valeur_pillule=5) ],
                    3: [ Equipment("portoloin","w",usage= lambda creature : teleport(creature,False)), Pills("or10","J", valeur_pillule=10)]}
+    marchande = { 0: [ Weapon("épée",3,37,"s",f=True),Equipment("gum","g", usage=lambda creature: jet(True),used=Used("used chewing-gum","u")) ,Equipment("potion","!",usage=lambda creature : heal(creature),f=True)],
+                   1: [ Equipment("lance-pierre","a", usage=lambda creature: tir(False)),Equipment("potion","!",usage= lambda creature : teleport(creature,True),f=True)],
+                   2: [ Armor("plaid",5,376506)],
+                   3: [ Equipment("portoloin","w",usage= lambda creature : teleport(creature,False))]}
     decorations = { 0:[Decoration("lit","Be",False)]}
     def __init__(self,hero=None,sizemap=20,stage=10,fl=None):
         self.hero=Hero()
@@ -1111,7 +1121,7 @@ class Game(object):
         herobox = PhotoImage(file=imgPATH+"hero_box.png").zoom(3)
         dialoguebox = PhotoImage(file=imgPATH+"dialogue.png")
         self.dicimages={"." : sol_img1,"," : sol_img2,"`" : sol_img3,"´" : sol_img4,"@" : [hero_fi,hero_bi,hero_li,hero_ri],"!" : pot_img3,"G" : ted_img,"W":ted_img,"O":sad_img,"B":ted_img,"D":ted_img,"s":bequille_img, "a" : img_stonelance,"!":pot_img1,"c":pot_img3,"b":or1_img,"j":or2_img,"p":or5_img,"P":or10_img,"M":marchand_f,'inventory':hotbar, 'faim100' : faim100 , 'faim75' : faim75 , 'faim50' : faim50 , 'faim25' : faim25 , 'faim0': faim0, 'empty' : vide , 'herobox' : herobox , 'health' : vie,'dialogue' : dialoguebox.zoom(5), ">" : esc_up, "<" : esc_down,"u":chew_img,"g":gum_img}
-        self.dicanim={"@":[hero_fw1,hero_rw1,hero_bw1,hero_lw1,hero_fw2,hero_rw2,hero_bw2,hero_lw2]}
+        self.dicanim={"@":[hero_fw1,hero_bw1,hero_lw1,hero_rw1,hero_fw2,hero_bw2,hero_lw2,hero_rw2]}
         #dictionnaire pour avoir les images en zoom dans l'inventaire
         self.dicinventory={"@" : hero_fi.zoom(2),"!" : pot_img3.zoom(2), "a" : img_stonelance.zoom(2),"s":bequille_img.zoom(2),"!":pot_img1.zoom(2),"c":pot_img3.zoom(2),"b":or1_img.zoom(2),"j":or2_img.zoom(2),"p":or5_img.zoom(2),"P":or10_img.zoom(2),"g":gum_img.zoom(2)}
         self.dicseen={"dy":dyel,"do":dora,"dl":dlig,"db":dblu,"dg":dgre,"dr":dred}
@@ -1125,14 +1135,21 @@ class Game(object):
 
     def gameturn(self,event) -> None:
         "Makes an action according to the bind result"
+        poshero=self.floor.pos(self.hero)
         if isinstance(event,Event) and event.char in self._actions:
             self._actions[event.char](self.floor.hero)
+        [self.fenetre.bind(i,nonefunc) for i in self._actions]
         self.hero.food()
         self.floor.moveAllMonsters()
         self.seeMap()
-        self.updategraph()
+        for i in range(3):
+            print("TURN")
+            self.updategraph(i,[self.floor.pos(self.hero),poshero])
+            print(poshero,self.floor.pos(self.hero))
+            sleep(0.1)
+        [self.fenetre.bind(i,self.gameturn) for i in self._actions]
 
-    def updategraph(self) -> None:
+    def updategraph(self,n=0,position=None) -> None:
         """Main graphic function.
         Displays the map on the canvas, using the images defined in initgraph.
         Then adds the minimap on the corner of the screen (place not defined yet, currently (600,600)).
@@ -1140,20 +1157,23 @@ class Game(object):
         y=0
         self.canvas.delete("all")
         print(self.floor,"\n".join(["".join([str(self.viewablemap[n][k]) for k in range(self.sizemap)]) for n in range(self.sizemap)])+"\n") #-> debug
-        poshero=self.floor.pos(self.hero)
+        if position==None:
+            poshero=self.floor.pos(self.hero)
+        else:
+            poshero=position[0]+(position[0]-position[1])/(n+1)
         for i in self.viewablemap:
             x=0
             for k in i:
                 if k!=Map.empty:
-                    self.canvas.create_image((x-poshero.x)*32+401,(y-poshero.y)*32+400,image=self.dicimages.get(self.floor.blankmap[int(y)][int(x)]))
+                    self.canvas.create_image(((Coord(x,y)-poshero)*32+Coord(401,400)).__index__(),image=self.dicimages.get(self.floor.blankmap[int(y)][int(x)]))
                 if k in self.dicimages:
                     image=self.dicimages.get(k)
                     if type(image) is list:
-                        self.canvas.create_image((x-poshero.x)*32+401,(y-poshero.y)*32+400,image=image[self.hero.facing.facing()])
+                        self.canvas.create_image(((Coord(x,y)-poshero)*32+Coord(401,400)).__index__(),image=image[self.hero.facing.facing()] if n==0 else self.dicanim.get(k)[self.hero.facing.facing()+(4*(n-1))])
                     else:
-                        self.canvas.create_image((x-poshero.x)*32+401,(y-poshero.y)*32+400,image=self.dicimages.get(k))
+                        self.canvas.create_image(((Coord(x,y)-poshero)*32+Coord(401,400)).__index__(),image=image)
                 else:
-                    self.canvas.create_text((x-poshero.x)*32+401,(y-poshero.y)*32+400,text=str(k),font="Arial 16")
+                    self.canvas.create_text(((Coord(x,y)-poshero)*32+Coord(401,400)).__index__(),text=str(k),font="Arial 16")
                 x+=1
             y+=1
         #truc pour l'interface
@@ -1206,7 +1226,8 @@ class Game(object):
         #affichage des dialogue dans la boite de dialogue
         self.canvas.create_image(420,710,image = self.dicimages['dialogue'])
 
-        self.canvas.create_text(500,750,text=self.readMessages(),font="Arial 25 italic",fill="white")
+        if position == None or n==2:
+            self.canvas.create_text(500,750,text=self.readMessages(),font="Arial 25 italic",fill="white")
         #inventaire ecrit: self.canvas.create_text(500,770,text=self.floor.hero.description(),font="Arial 16 italic",fill="white")
         #fin de la boite de dialogue
         self.canvas.pack()
