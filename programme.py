@@ -5,7 +5,6 @@ from time import sleep,time
 import random
 from typing import *
 from tkinter import *
-from pynput.mouse import Controller
 import copy
 import math
 def nonefunc(x=0,y=0,z=0):
@@ -221,6 +220,22 @@ class Coord(object):
             return 2
         if cp==Coord(-1,0):
             return 3
+
+    def testaffine(self,other1,other2,other3):
+        a=0
+        try:
+            affine1=lambda x : (other1.y-other2.y)/(other1.x-other2.x)*x-(other1.y-other2.y)/(other1.x-other2.x)*other1.x+other1.y
+            affine2=lambda x : (other1.y-other3.y)/(other1.x-other3.x)*x-(other1.y-other3.y)/(other1.x-other3.x)*other1.x+other1.y
+            affine3=lambda x : (other3.y-other2.y)/(other3.x-other2.x)*x-(other3.y-other2.y)/(other3.x-other2.x)*other3.x+other3.y
+        except ZeroDivisionError:
+            return False
+        if affine1(self.x)>=self.y:
+            a+=1
+        if affine2(self.x)>=self.y:
+            a+=1
+        if affine3(self.x)>=self.y:
+            a+=1
+        return a==2
 
 class Status(object):
     "Status affecting a creature each turn, making her losing points from a stat"
@@ -531,7 +546,7 @@ class Armor(Equipment):
 
     def equiper(self,creature : Creature) -> None:
         "Equipment of a armor: we unequip the previous armor,replace it by the new one, and increase the creature's defense."
-        if creature.equips[0]!=None:
+        if creature.equips[1]!=None:
             creature.equips[1].desequiper(creature)
         creature.hp+=self.defense
         creature.equips[1]=self
@@ -557,7 +572,7 @@ class Amulet(Equipment):
 
     def equiper (self,creature : Hero) -> None:
         "Equipment of a amulet: we unequip the previous amulet,replace it by the new one, and increase the hero's stats."
-        if creature.equips[0]!=None:
+        if creature.equips[2]!=None:
             creature.equips[2].desequiper(creature)
         creature.hp+=self.defense
         creature.strength+=self.force
@@ -606,6 +621,7 @@ class Seller(NPC):
         if isinstance(creature,Hero):
             [theGame().addMessage(self.name+" : "+ i) for i in self.actif]
             theGame().fenetre.bind('b', self.fin_de_discussion())
+            self.poches_fenetre()
 
     def response(self) -> None:
         "shopping not implemented yet"
@@ -614,6 +630,30 @@ class Seller(NPC):
     def fin_de_discussion(self) -> None:
         "Prints dialogs and exits"
         [theGame().addMessage(i) for i in self.dialoguenon]
+
+    def poches_fenetre(self):   #ouvre une autre fenetre tkinter
+        fen = Tk()
+        fen.title('Poches de la marchande')
+        objet1=Canvas(fen, bg="red", width=200, height=200)
+        objet1.grid(row = 0, column = 0, padx=2, pady=2)
+        #objet1.pack()
+        bouton1 = Button(fen, text=self.chariot[0].name, command=theGame().hero.take(self.chariot[0]))
+        bouton1.grid(row=1, column=0)
+        #objet1.pack()
+        objet2=Canvas(fen, bg="blue", width=200, height=200)
+        objet2.grid(row = 0, column = 1, padx=2, pady=2)
+        #objet2.pack()
+        bouton2 = Button(fen, text=self.chariot[1].name, command=theGame().hero.take(self.chariot[1]))
+        bouton2.grid(row=1, column=1)
+        objet3=Canvas(fen, bg="green", width=200, height=200)
+        objet3.grid(row = 0, column = 2, padx=2, pady=2)
+        #objet3.pack()
+        bouton3 = Button(fen, text=self.chariot[2].name, command=theGame().hero.take(self.chariot[2]))
+        bouton3.grid(row=1, column=2)
+        #bouton3.pack()
+        bouton_quitter = Button(fen, text='Ne rien prendre', command=fen.destroy) #Bouton quitter
+        bouton_quitter.grid(row=1, column=3)
+        fen.mainloop()
 
 class Room(object):
     "Room defined by her corner's coord"
@@ -1063,40 +1103,40 @@ class Game(object):
         "Creates the dictionary of images,and binds actions to the Tk window, then creates the mainloop."
         genPATH=__file__
         imgPATH=genPATH[0:-12]+"images/"
-        hero_fi=PhotoImage(file=imgPATH+"hero_face_i.png")
-        hero_ri=PhotoImage(file=imgPATH+"hero_right_i.png")
-        hero_bi=PhotoImage(file=imgPATH+"hero_back_i.png")
-        hero_li=PhotoImage(file=imgPATH+"hero_left_i.png")
-        hero_fw1=PhotoImage(file=imgPATH+"hero_face_w1.png")
-        hero_rw1=PhotoImage(file=imgPATH+"hero_right_w1.png")
-        hero_bw1=PhotoImage(file=imgPATH+"hero_back_w1.png")
-        hero_lw1=PhotoImage(file=imgPATH+"hero_left_w1.png")
-        hero_fw2=PhotoImage(file=imgPATH+"hero_face_w2.png")
-        hero_rw2=PhotoImage(file=imgPATH+"hero_right_w2.png")
-        hero_bw2=PhotoImage(file=imgPATH+"hero_back_w2.png")
-        hero_lw2=PhotoImage(file=imgPATH+"hero_left_w2.png")
-        sol_img1=PhotoImage(file=imgPATH+"sol_1.png")
-        sol_img2=PhotoImage(file=imgPATH+"sol_2.png")
-        sol_img3=PhotoImage(file=imgPATH+"sol_3.png")
-        sol_img4=PhotoImage(file=imgPATH+"sol_4.png")
-        pot_img1=PhotoImage(file=imgPATH+"fiole_1.png")
-        pot_img3=PhotoImage(file=imgPATH+"fiole_3.png")
-        bequille_img=PhotoImage(file=imgPATH+"bequille.png")
-        chew_img=PhotoImage(file=imgPATH+"chewing-gum.png")
-        gum_img=PhotoImage(file=imgPATH+"gum.png")
-        ted_img=PhotoImage(file=imgPATH+"ourson_1.png")
-        sad_img=PhotoImage(file=imgPATH+"tristesse_1.png")
-        or1_img=PhotoImage(file=imgPATH+"or1.png")
-        or2_img=PhotoImage(file=imgPATH+"or2.png")
-        or5_img=PhotoImage(file=imgPATH+"or5.png")
-        or10_img=PhotoImage(file=imgPATH+"or10.png")
-        marchand_f=PhotoImage(file=imgPATH+"marchand_de_face.png")
-        marchand_f=PhotoImage(file=imgPATH+"marchand_de_face2.png")
-        marchand_d=PhotoImage(file=imgPATH+"marchand_vers_droite.png")
-        marchand_g=PhotoImage(file=imgPATH+"marchand_vers_gauche.png")
-        marchand_sf=PhotoImage(file=imgPATH+"marchand_sucette_de_face.png")
-        img_stonelance=PhotoImage(file=imgPATH+"lancepierre.png")
-        esc_up=PhotoImage(file=imgPATH+"escalier_up.png")
+        hero_fi=PhotoImage(file=imgPATH+"hero_face_i.png").zoom(2)
+        hero_ri=PhotoImage(file=imgPATH+"hero_right_i.png").zoom(2)
+        hero_bi=PhotoImage(file=imgPATH+"hero_back_i.png").zoom(2)
+        hero_li=PhotoImage(file=imgPATH+"hero_left_i.png").zoom(2)
+        hero_fw1=PhotoImage(file=imgPATH+"hero_face_w1.png").zoom(2)
+        hero_rw1=PhotoImage(file=imgPATH+"hero_right_w1.png").zoom(2)
+        hero_bw1=PhotoImage(file=imgPATH+"hero_back_w1.png").zoom(2)
+        hero_lw1=PhotoImage(file=imgPATH+"hero_left_w1.png").zoom(2)
+        hero_fw2=PhotoImage(file=imgPATH+"hero_face_w2.png").zoom(2)
+        hero_rw2=PhotoImage(file=imgPATH+"hero_right_w2.png").zoom(2)
+        hero_bw2=PhotoImage(file=imgPATH+"hero_back_w2.png").zoom(2)
+        hero_lw2=PhotoImage(file=imgPATH+"hero_left_w2.png").zoom(2)
+        sol_img1=PhotoImage(file=imgPATH+"sol_1.png").zoom(2)
+        sol_img2=PhotoImage(file=imgPATH+"sol_2.png").zoom(2)
+        sol_img3=PhotoImage(file=imgPATH+"sol_3.png").zoom(2)
+        sol_img4=PhotoImage(file=imgPATH+"sol_4.png").zoom(2)
+        pot_img1=PhotoImage(file=imgPATH+"fiole_1.png").zoom(2)
+        pot_img3=PhotoImage(file=imgPATH+"fiole_3.png").zoom(2)
+        bequille_img=PhotoImage(file=imgPATH+"bequille.png").zoom(2)
+        chew_img=PhotoImage(file=imgPATH+"chewing-gum.png").zoom(2)
+        gum_img=PhotoImage(file=imgPATH+"gum.png").zoom(2)
+        ted_img=PhotoImage(file=imgPATH+"ourson_1.png").zoom(2)
+        sad_img=PhotoImage(file=imgPATH+"tristesse_1.png").zoom(2)
+        or1_img=PhotoImage(file=imgPATH+"or1.png").zoom(2)
+        or2_img=PhotoImage(file=imgPATH+"or2.png").zoom(2)
+        or5_img=PhotoImage(file=imgPATH+"or5.png").zoom(2)
+        or10_img=PhotoImage(file=imgPATH+"or10.png").zoom(2)
+        marchand_f=PhotoImage(file=imgPATH+"marchand_de_face.png").zoom(2)
+        marchand_f=PhotoImage(file=imgPATH+"marchand_de_face2.png").zoom(2)
+        marchand_d=PhotoImage(file=imgPATH+"marchand_vers_droite.png").zoom(2)
+        marchand_g=PhotoImage(file=imgPATH+"marchand_vers_gauche.png").zoom(2)
+        marchand_sf=PhotoImage(file=imgPATH+"marchand_sucette_de_face.png").zoom(2)
+        img_stonelance=PhotoImage(file=imgPATH+"lancepierre.png").zoom(2)
+        esc_up=PhotoImage(file=imgPATH+"escalier_up.png").zoom(2)
         esc_down=PhotoImage(file=imgPATH+"escalier_down.png")
         vide = PhotoImage(file=imgPATH+"empty.png").zoom(2)
         hotbar = PhotoImage(file=imgPATH+"hotbar.png").zoom(2)
@@ -1146,7 +1186,7 @@ class Game(object):
             print("TURN")
             self.updategraph(i,[self.floor.pos(self.hero),poshero])
             print(poshero,self.floor.pos(self.hero))
-            sleep(0.1)
+            sleep(0.3)
         [self.fenetre.bind(i,self.gameturn) for i in self._actions]
 
     def updategraph(self,n=0,position=None) -> None:
@@ -1165,15 +1205,15 @@ class Game(object):
             x=0
             for k in i:
                 if k!=Map.empty:
-                    self.canvas.create_image(((Coord(x,y)-poshero)*32+Coord(401,400)).__index__(),image=self.dicimages.get(self.floor.blankmap[int(y)][int(x)]))
+                    self.canvas.create_image(((Coord(x,y)-poshero)*64+Coord(401,400)).__index__(),image=self.dicimages.get(self.floor.blankmap[int(y)][int(x)]))
                 if k in self.dicimages:
                     image=self.dicimages.get(k)
                     if type(image) is list:
-                        self.canvas.create_image(((Coord(x,y)-poshero)*32+Coord(401,400)).__index__(),image=image[self.hero.facing.facing()] if n==0 else self.dicanim.get(k)[self.hero.facing.facing()+(4*(n-1))])
+                        self.canvas.create_image(((Coord(x,y)-poshero)*64+Coord(401,400)).__index__(),image=image[self.hero.facing.facing()] if n==0 else self.dicanim.get(k)[self.hero.facing.facing()+(4*(n-1))])
                     else:
-                        self.canvas.create_image(((Coord(x,y)-poshero)*32+Coord(401,400)).__index__(),image=image)
+                        self.canvas.create_image(((Coord(x,y)-poshero)*64+Coord(401,400)).__index__(),image=image)
                 else:
-                    self.canvas.create_text(((Coord(x,y)-poshero)*32+Coord(401,400)).__index__(),text=str(k),font="Arial 16")
+                    self.canvas.create_text(((Coord(x,y)-poshero)*64+Coord(401,400)).__index__(),text=str(k),font="Arial 16")
                 x+=1
             y+=1
         #truc pour l'interface
@@ -1231,6 +1271,7 @@ class Game(object):
         #inventaire ecrit: self.canvas.create_text(500,770,text=self.floor.hero.description(),font="Arial 16 italic",fill="white")
         #fin de la boite de dialogue
         self.canvas.pack()
+        self.fenetre.update()
         if theGame().floor.hero.hp<1:
             self.endgame()
 
