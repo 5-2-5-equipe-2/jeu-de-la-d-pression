@@ -7,15 +7,18 @@ from typing import *
 from tkinter import *
 import copy
 import math
+
+delaianim=0
+
 def nonefunc(x=0,y=0,z=0):
     "test"
     return
 
 def sign(x : float) -> Literal[-1,1]:
     "Returns the sign of a float"
-    if x > 0:
-        return 1
-    return -1
+    if x==0:
+        return 0
+    return -1 if x<0 else 1
 
 def heal(creature) -> True:
     """Heals a creature \n
@@ -32,6 +35,12 @@ def teleport(creature, unique : bool) -> bool:
         c=f[Coord(random.randint(0,l),random.randint(0,l))]
     f.move(creature,c-f.pos(creature))
     return unique
+
+def eat(creature, miam):
+    """Feed the Hero with food elements"""
+    creature.satiete+=miam
+    print("MIAM MIAM MIAM")
+    return True
 
 def getch():
     """Single char input, only works only on mac/linux/windows OS terminals"""
@@ -94,48 +103,47 @@ class Coord(object):
             self.x=int(self.x)
             self.y=int(self.y)
 
-    def __repr__(self) -> str:
-        return "<"+str(self.x)+","+str(self.y)+">"
+    def __repr__(self) -> str: return "<"+str(self.x)+","+str(self.y)+">"
 
     def __eq__(self,other) -> bool:
-        return self.x==other.x and self.y==other.y
+        return self.x==other.x and self.y==other.y if type(other) is Coord else len(self)==other
 
     def __ne__(self,other) -> bool:
         return not(self==other)
 
     def __add__(self,other):
         if type(other) is Coord:
-            return Coord(self.x+other.x,self.y+other.y)
+            return Coord(self.x+other.x,self.y+other.y,broken=True)
         if (type(other) is int) or (type(other) is float):
             return Coord(self.x+other,self.y+other)
 
     def __neg__(self):
-        return Coord(-self.x,-self.y)
+        return Coord(-self.x,-self.y,broken=True)
 
     def  __mul__(self,other):
         if type(other) is Coord:
-            return Coord(self.x*other.x,self.y*other.y)
+            return Coord(self.x*other.x,self.y*other.y,broken=True)
         if (type(other) is int) or (type(other) is float):
             return Coord(self.x*other,self.y*other)
 
     def __sub__(self,other):
         if type(other) is Coord:
-            return Coord(self.x-other.x,self.y-other.y)
+            return Coord(self.x-other.x,self.y-other.y,broken=True)
         if (type(other) is int) or (type(other) is float):
             return Coord(self.x-other,self.y-other)
 
     def __abs__(self):
-        return Coord(abs(self.x),abs(self.y))
+        return Coord(abs(self.x),abs(self.y),broken=True)
 
     def __floordiv__(self,other):
         if type(other) is Coord:
-            return Coord(self.x/other.x,self.y/other.y)
+            return Coord(self.x/other.x,self.y/other.y,broken=True)
         if (type(other) is int) or (type(other) is float):
             return Coord(self.x/other,self.y/other)
 
     def __truediv__(self,other):
         if type(other) is Coord:
-            return Coord(self.x/other.x,self.y/other.y)
+            return Coord(self.x/other.x,self.y/other.y,broken=True)
         if (type(other) is int) or (type(other) is float):
             return Coord(self.x/other,self.y/other)
 
@@ -166,8 +174,8 @@ class Coord(object):
         if (type(other) is int) or (type(other) is float):
             return len(self)>=other
 
-    def __index__(self) -> tuple:
-        return (self.x,self.y)
+    def ind(self) -> tuple:
+        return self.x,self.y
 
     def distance(self,other) -> float:
         "Diagonal distance between two points"
@@ -185,6 +193,9 @@ class Coord(object):
         if self.y>0:
             return Coord(0,-1)
         return Coord(0,1)
+
+    def cosinus(self,other):
+        return (self-other).x/(self-other).__len__()
 
     def direction(self,other):
         "Direction from a point to another"
@@ -208,7 +219,6 @@ class Coord(object):
 
     def facing(self):
         "Function to choose the correct direction of an image"
-        #cp=Coord(self.x,self.y/2)
         cp=self.dirtrig()
         if cp==Coord(0,0):
             return 0
@@ -236,6 +246,11 @@ class Coord(object):
         if affine3(self.x)>=self.y:
             a+=1
         return a==2
+
+class CoordScreen(Coord):
+    "A Coord, but defined by its place on the screen."
+    def __init__(self,x : float ,y : float):
+        Coord.__init__(self,x*1080,y*800,broken=True)
 
 class Status(object):
     "Status affecting a creature each turn, making her losing points from a stat"
@@ -358,7 +373,7 @@ class Creature(Element):
         theGame().addMessage(f"Le {self.description} a gagné un niveau!(niveau {self.level})")
 
     def throw(self,equip):
-        "Throw the item"
+        "Throws the item"
         devant= theGame().floor._elem[self]+self.facing
         i=5
         while((devant+self.facing in theGame().floor) and theGame().floor.get(devant+self.facing)in Map.listground and i!=0):
@@ -367,11 +382,9 @@ class Creature(Element):
         if ((devant+self.facing) in theGame().floor) and isinstance(theGame().floor.get(devant+self.facing),Creature):
             theGame().floor.get(devant+self.facing).action+=8
         elif ((devant+self.facing) in theGame().floor) and theGame().floor.get(devant+self.facing)in Map.listground:
-            theGame().floor.put(devant+theGame().floor.hero.facing, equip if equip.used=="idem" else equip.used)
+            theGame().floor.put(devant+theGame().floor.hero.facing, equip if equip.used=="idem" else copy.copy(equip.used))
         elif ((devant+self.facing) in theGame().floor) and (isinstance(theGame().floor.get(devant+self.facing), Equipment) or theGame().floor.get(devant+self.facing)==Map.empty):
-            theGame().floor.put(devant,equip if equip.used=="idem" else equip.used)
-        else:
-            theGame().floor.put(devant,equip if equip.used=="idem" else equip.used)
+            theGame().floor.put(devant,equip if equip.used=="idem" else copy.copy(equip.used))
         self._inventory.remove(equip)
 
 class Pills(Element):
@@ -421,7 +434,7 @@ class Used(Equipment):
       return True
 
 class Enchant(object):
-    "Enchant on upgrade to apply on an Equipment"
+    "Enchant or upgrade to apply on an Equipment"
     def __init__(self,name="+",effect=None,increase=[("force",1)]):
         self.name=name
         self.effect=effect
@@ -484,6 +497,8 @@ class Hero(Creature):
         self.hpmax+=2
         self.level+=1
         self.strength+=1
+        self.joie+=10
+        self.peur-=10
         self.hp=self.hpmax
         theGame().addMessage(f"Bien joué! Bravo!! Tu es maintenant niveau {self.level}")
 
@@ -510,6 +525,57 @@ class Hero(Creature):
                 self.hp+=5
                 for _ in range(10):
                     theGame().gameturn("<space>")
+
+    def emotion_effect (self):
+        "Affects the hero according to its emotions"
+        #joie
+        if self.joie>=90:
+            self.hp+=2
+            self.tristesse-=2
+            self.colere-=1
+            self.peur-=1
+        elif self.joie>=80:
+            self.hp+=1
+            self.tristesse-=1
+            self.colere-=1
+            self.peur-=1
+        elif self.joie>=30:
+            self.tristesse+=1
+        elif self.joie>=20:
+            self.hp-=1
+            self.tristesse+=1
+        elif self.joie>=10:
+            self.hp-=2
+            self.tristesse+=2
+            self.colere+=1
+            self.peur+=5
+        elif self.joie<=0:
+            self.hp-=5
+            self.tristesse+=5
+            self.colere+=1
+            self.peur+=10
+        #tristesse
+        if self.tristesse<=10:
+            self.hp+=2
+            self.joie+=2
+            self.peur-=1
+        elif self.tristesse<=90:
+            self.hp-=1
+            #reduire le champ de vision
+        #peur
+        if self.peur<=10:
+            self.hp+=2
+            self.joie+=2
+        elif self.peur<=90:
+            self.hp-=1
+            r=random.randint(1,4)
+            if r==1:
+                theGame().gameturn("<space>")
+                self.peur+=2
+        #colere
+        if self.colere<=10:
+            self.hp+=2
+            self.joie+=2
 
 class Weapon(Equipment):
     "Equipable Equipment, increasing the creature's strength(Weapon: slot 0 in the Creature's equips)"
@@ -634,25 +700,32 @@ class Seller(NPC):
     def poches_fenetre(self):   #ouvre une autre fenetre tkinter
         fen = Tk()
         fen.title('Poches de la marchande')
+        parole1 = Label(fen,text=(self.name+": "+self.actif[0]+self.actif[1]) )
+        parole1.grid(row=0, column=0, padx= 3, pady=3,columnspan=3,sticky=W)
+        parole2 = Label(fen,text=("                   "+self.actif[2]+self.actif[3]))
+        parole2.grid(row=1, column=0, padx= 3, pady=3, columnspan=3, sticky=W)
         objet1=Canvas(fen, bg="red", width=200, height=200)
-        objet1.grid(row = 0, column = 0, padx=2, pady=2)
-        #objet1.pack()
+        objet1.grid(row = 2, column = 0, padx=2, pady=2)
+        '''print(self.chariot[0].abbrv)
+        picture1 = theGame().dicimages.get(self.chariot[0].abbrv)
+        print(picture1)
+        objet1.create_image(0,0,image = picture1)'''
         bouton1 = Button(fen, text=self.chariot[0].name, command=theGame().hero.take(self.chariot[0]))
-        bouton1.grid(row=1, column=0)
-        #objet1.pack()
+        bouton1.grid(row=3, column=0)
         objet2=Canvas(fen, bg="blue", width=200, height=200)
-        objet2.grid(row = 0, column = 1, padx=2, pady=2)
-        #objet2.pack()
+        objet2.grid(row =2, column = 1, padx=2, pady=2)
+        '''picture1 = theGame().dicimages.get(self.chariot[0].abbrv)
+        objet1.create_image(50,0,image = picture1)'''
         bouton2 = Button(fen, text=self.chariot[1].name, command=theGame().hero.take(self.chariot[1]))
-        bouton2.grid(row=1, column=1)
+        bouton2.grid(row=3, column=1)
         objet3=Canvas(fen, bg="green", width=200, height=200)
-        objet3.grid(row = 0, column = 2, padx=2, pady=2)
-        #objet3.pack()
+        objet3.grid(row = 2, column = 2, padx=2, pady=2)
+        '''picture1 = theGame().dicimages.get(self.chariot[0].abbrv)
+        objet1.create_image(100,0,image = picture1)'''
         bouton3 = Button(fen, text=self.chariot[2].name, command=theGame().hero.take(self.chariot[2]))
-        bouton3.grid(row=1, column=2)
-        #bouton3.pack()
+        bouton3.grid(row=3, column=2)
         bouton_quitter = Button(fen, text='Ne rien prendre', command=fen.destroy) #Bouton quitter
-        bouton_quitter.grid(row=1, column=3)
+        bouton_quitter.grid(row=3, column=3)
         fen.mainloop()
 
 class Room(object):
@@ -698,11 +771,25 @@ class Room(object):
             coord=self.randCoord()
         return coord
 
+    def randEmptyCoord2(self,map) -> Coord:
+        "Returns a coord not assigned to any Element in the Map + the coord up from the previous one not assignated either"
+        coord=self.center()
+        cc=self.center()
+        while not(coord+Coord(0,-1) in self) or coord in map._elem.values() or coord==cc or coord+Coord(0,-1) in map._elem.values() or coord+Coord(0,-1)==cc:
+            coord=self.randCoord()
+        return coord
+
     def decorate(self,map,seller=True) -> None:
         "Adds random elements in the Room in the Map"
         map.put(self.randEmptyCoord(map),theGame().randEquipment())
         map.put(self.randEmptyCoord(map),theGame().randMonster())
-        map.put(self.randEmptyCoord(map),theGame().randDecoration())
+        a=theGame().randDecoration()
+        if len(a)==1:
+            map.put(self.randEmptyCoord(map),copy.copy(a[0]))
+        elif len(a)==2:
+            c=self.randEmptyCoord2(map)
+            for i in range(2):
+                map.put(c+Coord(0,-i),copy.copy(a[i]))
         if seller==True:
             map.put(random.choice(map._rooms).randEmptyCoord(map),theGame().randSeller())
 
@@ -734,12 +821,12 @@ class Map(object):
         self.generateRooms(self.nbrooms)
         self.reachAllRooms()
         self.blankmap=[[str(self._mat[j][i]) for i in range(len(self))] for j in range(len(self))]
+        self.generateEscalier()
         self.put(self._rooms[0].center(),self.hero)
         for i in self._elem.keys():
             self._mat[self._elem.get(i).y][self._elem.get(i).x]=i.abbrv
         for i in self._rooms:
             i.decorate(self,i==self._rooms[1])
-        self.generateEscalier()
 
     def __repr__(self) -> str:
         return "\n".join(["".join([str(self._mat[n][k]) for k in range(len(self))]) for n in range(len(self))])+"\n"
@@ -800,6 +887,7 @@ class Map(object):
         self.checkCoord(coord)
         self.checkElement(element)
         if self[coord]==self.empty or (isinstance(self[coord],Element)) or (isinstance(self[coord],Special_ground)):
+            print(f"#{self[coord]}#")
             raise ValueError('Incorrect cell')
         if element in self:
             raise KeyError('Already placed')
@@ -916,15 +1004,84 @@ class Map(object):
                 self.addRoom(r)
 
     def generateEscalier(self):
-        if self.get(self._rooms[0].center()+Coord(0,1))!= self.empty:
-            self.rm(self._rooms[0].center()+Coord(0,1))
-        self.put((self._rooms[0].center()+Coord(0,1)),Stairs("Monter",">",up=True))
+        c=random.choice(theGame().directions)
+        self.put((self._rooms[0].center()+c),Stairs("Monter",">",up=True))
         salle_down= random.choice(self._rooms)
         while salle_down == self._rooms[0]:
             salle_down= random.choice(self._rooms)
-        if self.get(salle_down.center()+Coord(0,1)) not in self.listground:
-            self.rm(salle_down.center()+Coord(0,1))
-        self.put(salle_down.center()+Coord(0,1),Stairs("Descendre","<",up=False))
+        c=random.choice(theGame().directions)
+        self.put(salle_down.center()+c,Stairs("Descendre","<",up=False))
+
+    def moveAllMonsters(self) -> None:
+        """Moves all creatures from the map, except the Hero."""
+        for i in self._elem:
+            if isinstance(i,Creature) and not (isinstance(i,Hero) or isinstance(i,NPC)):
+                i.creaturn()
+                if i.action>0:
+                    i.action-=1
+                    pass
+                if self._elem[i].distance(self._elem[self.hero])<=1 :
+                    self.hero.meet(i)
+                elif self._elem[i].distance(self._elem[self.hero])<6:
+                    posmonstre = self.pos(i)
+                    poshero = self.pos(self.hero)
+                    new = posmonstre - poshero
+                    way1 = Coord(-sign(new.x),-sign(new.y))               
+                    #diagonale 'imparfaite'
+                    if ((way1.x and way1.y) != 0) and (self._elem[i].cosinus(self._elem[self.hero]) != (1/math.sqrt(2) or -1/math.sqrt(2))):
+                        way2 = self._elem[i].direction(self._elem[self.hero])
+                        #creation de way3 et way4
+                        if way2.y ==0:
+                            way3 = Coord(way2.x,-way1.y)
+                            way4 = Coord(0,way1.y)
+                        else:
+                            way3 = Coord(-way1.x, way2.y)
+                            way4 = Coord(way1.x , 0)
+                        way5 = 0
+                    #diagonales 'parfaites'
+                    elif (way1.x and way1.y) != 0 :
+                        #creation de way2, way3, way4, way5
+                        way2 = Coord(0,way1.y)
+                        way3 = Coord(way1.x,0)
+                        way4 = Coord(way1.x,-way1.y)
+                        way5 = Coord(-way1.x,way1.y)
+
+                    #cas ou le monstre doit se deplacer en ligne droite
+                    else :
+                        if way1.x ==0:
+                            way2 = Coord(1,way1.y)
+                            way3 = Coord(-1,way1.y)
+                            way4 = Coord(1,0)
+                            way5 = Coord(-1,0)
+                        else:
+                            way2 = Coord(way1.x,1)
+                            way3 = Coord(way1.x,-1)
+                            way4 = Coord(0,1)
+                            way5 = Coord(0,-1)
+
+                    #cas ou il n'y a aucun obstacle devant la premiere direction (on privilegie le deplacement en diagonale)
+                    if self.get(self._elem[i]+way1) in self.listground or isinstance(self.get(self._elem[i]+way1),Used) :
+                        self.move(i,way1)
+
+                    #cas ou il y a un obstacle devant la premiere direction possible, on choisi donc la deuxieme direction possible
+                    elif self.get(self._elem[i]+way2) in self.listground  or isinstance(self.get(self._elem[i]+way2),Used) :
+                        self.move(i,way2)
+
+                    #cas ou il y a un obstacle devant la premiere et deuxieme direction possible, on choisi donc la troisieme direction possible
+                    elif self.get(self._elem[i]+way3) in self.listground or isinstance(self.get(self._elem[i]+way3),Used) :
+                        self.move(i,way3)
+
+                    #cas ou il y a un obstacle devant la premiere, deuxieme et troisieme direction possible, on choisi donc la quatrieme direction possible
+                    elif self.get(self._elem[i]+way4) in self.listground or isinstance(self.get(self._elem[i]+way4),Used) :
+                        self.move(i,way4)
+
+                    #cas ou il y a un obstacle devant la premiere, deuxieme ,troisieme et quatrieme direction possible, on choisi donc la cinquieme direction possible
+                    elif (self.get(self._elem[i]+way5) in self.listground  or isinstance(self.get(self._elem[i]+way1),Used)) and way5 !=0 :
+                        self.move(i,way5)
+
+                else: #si le monstre est trop loin du hero, il a 25%  de chance de faire un deplacement completement aleatoire)
+                    if random.randint(0,3)==0:
+                            self.move(i,Coord(random.randint(-1,1),random.randint(-1,1)))
 
     def checkCoord(self,coord) -> None:
         "Method to check if an object is a Coord in the Map. Raises errors."
@@ -937,38 +1094,6 @@ class Map(object):
         "Method to check if an object is an Element. Raises errors."
         if not(isinstance(elem,Element)) and not(isinstance(elem,Special_ground)):
             raise TypeError('Not a Element')
-
-    def moveAllMonsters(self) -> None:
-        """Moves all creatures from the map, except the Hero."""
-        direction = [Coord(0,1),Coord(0,-1),Coord(1,0),Coord(-1,0),Coord(-1,1),Coord(-1,-1),Coord(1,1),Coord(1,-1)]
-        for i in self._elem:
-            if isinstance(i,Creature) and not (isinstance(i,Hero) or isinstance(i,NPC)):
-                i.creaturn()
-                if i.action>0:
-                    i.action-=1
-                    pass
-                if self._elem[i].distance(self._elem[self.hero])<=1 :
-                    self.hero.meet(i)
-                elif self.get(self._elem[i]+self._elem[i].direction(self._elem[self.hero])) in self.listground or isinstance(self.get(self._elem[i]+self._elem[i].direction(self._elem[self.hero])),Used) :
-                    if self._elem[i].distance(self._elem[self.hero])<6 :
-                        self.move(i,self._elem[i].direction(self._elem[self.hero]))
-                    elif random.randint(0,3)==0:
-                        deplacement = random.choice(direction)
-                        self.move(i,deplacement)
-
-                else:
-                    if self._elem[i].distance(self._elem[self.hero])<6 :
-                        posmonstre = self.pos(i)
-                        poshero = self.pos(self.hero)
-                        new = posmonstre - poshero #permet de savoir quelle direction donner si la premiere ne marche pas
-
-                        if (self.pos(i).direction(self.pos(self.hero))).x != 0:
-                            self.move(i,Coord(0,sign(new.x)))
-                        else:
-                            self.move(i,Coord(sign(new.y),0))
-                    elif random.randint(0,3)==0:
-                        deplacement = random.choice(direction)
-                        self.move(i,deplacement)
 
 class Special_ground(object):
     "Special ground affecting the hero"
@@ -1026,16 +1151,17 @@ class Game(object):
               "j" : lambda hero : hero.throw(theGame().select(hero._inventory))}
     monsters = { 0: [ Creature("Goblin",4), Creature("Bat",2,"W") ],
                  1: [ Creature("Ork",6,strength=2), Creature("Blob",10) ],
-                 5: [ Creature("Dragon",20,strength=3) ] }
-    equipments = { 0: [ Weapon("épée",3,37,"s",f=True),Equipment("gum","g", usage=lambda creature: jet(True),used=Used("used chewing-gum","u")) ,Equipment("potion","!",usage=lambda creature : heal(creature),f=True),Pills("or1","b",valeur_pillule=1)],
-                   1: [ Equipment("lance-pierre","a", usage=lambda creature: tir(False)),Equipment("potion","!",usage= lambda creature : teleport(creature,True),f=True) ,Pills("or2","j",valeur_pillule=2)],
-                   2: [ Armor("plaid",5,376506), Pills("or5","p",valeur_pillule=5) ],
-                   3: [ Equipment("portoloin","w",usage= lambda creature : teleport(creature,False)), Pills("or10","J", valeur_pillule=10)]}
-    marchande = { 0: [ Weapon("épée",3,37,"s",f=True),Equipment("gum","g", usage=lambda creature: jet(True),used=Used("used chewing-gum","u")) ,Equipment("potion","!",usage=lambda creature : heal(creature),f=True)],
-                   1: [ Equipment("lance-pierre","a", usage=lambda creature: tir(False)),Equipment("potion","!",usage= lambda creature : teleport(creature,True),f=True)],
+                 5: [ Creature("Dragon",20,strength=3)]}
+    equipments = { 0: [ Weapon("épée",3,37,"s",f=True),Equipment("gum","g", usage=lambda creature: jet(True),used=Used("used chewing-gum","u")) ,Equipment("potion","!",usage=lambda creature : heal(creature),f=True), Pills("or1","b",valeur_pillule=1), Equipment("sucette baveuse","s1",usage=lambda creature : eat(creature,1),f=True)],
+                   1: [ Equipment("lance-pierre","a", usage=lambda creature: tir(False)),Equipment("potion","!",usage= lambda creature : teleport(creature,True),f=True) ,Pills("or2","j",valeur_pillule=2),Equipment("sucette croquée","s2",usage=lambda creature : eat(creature,3),f=True)],
+                   2: [ Armor("plaid",5,376506), Pills("or5","p",valeur_pillule=5),Equipment("sucette","s3",usage=lambda creature : eat(creature,7),f=True), Equipment("cookie choco","cc",usage=lambda creature : eat(creature,8))],
+                   3: [ Pills("or10","J", valeur_pillule=10)]}
+    marchande =  { 0: [ Weapon("épée",3,37,"s",f=True),Equipment("gum","g", usage=lambda creature: jet(True),used=Used("used chewing-gum","u")) ,Equipment("potion","!",usage=lambda creature : heal(creature),f=True)],
+                   1: [ Equipment("lance-pierre","a", usage=lambda creature: tir(False)),Equipment("potion","!",usage= lambda creature : teleport(creature,True),f=True), Equipment("cookie choco","cc",usage=lambda creature : eat(creature,8))],
                    2: [ Armor("plaid",5,376506)],
                    3: [ Equipment("portoloin","w",usage= lambda creature : teleport(creature,False))]}
-    decorations = { 0:[Decoration("lit","Be",False)]}
+    decorations = { 0:[[Decoration("lit","Be2",True),Decoration("lit","Be1",True)],[Decoration("fauteuil","Fa",True)],[Decoration("pot","Po",True)]]}
+    directions=[Coord(0,1),Coord(1,1),Coord(1,0),Coord(1,-1),Coord(0,-1),Coord(-1,-1),Coord(-1,0),Coord(-1,1)]
     def __init__(self,hero=None,sizemap=20,stage=10,fl=None):
         self.hero=Hero()
         if hero!=None:
@@ -1084,7 +1210,7 @@ class Game(object):
         "Returns a random Creature using randElement"
         return self.randElement(self.monsters)
 
-    def randDecoration(self) -> Decoration:
+    def randDecoration(self) -> List[Decoration]:
         "Returns a random Equipment using randElement"
         return self.randElement(self.decorations)
 
@@ -1124,6 +1250,10 @@ class Game(object):
         bequille_img=PhotoImage(file=imgPATH+"bequille.png").zoom(2)
         chew_img=PhotoImage(file=imgPATH+"chewing-gum.png").zoom(2)
         gum_img=PhotoImage(file=imgPATH+"gum.png").zoom(2)
+        sucette1_img=PhotoImage(file=imgPATH+"sucette_1.png")
+        sucette2_img=PhotoImage(file=imgPATH+"sucette_2.png")
+        sucette3_img=PhotoImage(file=imgPATH+"sucette_3.png")
+        cookiechoco_img=PhotoImage(file=imgPATH+"cookie_chocolat.png")
         ted_img=PhotoImage(file=imgPATH+"ourson_1.png").zoom(2)
         sad_img=PhotoImage(file=imgPATH+"tristesse_1.png").zoom(2)
         or1_img=PhotoImage(file=imgPATH+"or1.png").zoom(2)
@@ -1135,9 +1265,13 @@ class Game(object):
         marchand_d=PhotoImage(file=imgPATH+"marchand_vers_droite.png").zoom(2)
         marchand_g=PhotoImage(file=imgPATH+"marchand_vers_gauche.png").zoom(2)
         marchand_sf=PhotoImage(file=imgPATH+"marchand_sucette_de_face.png").zoom(2)
+        bedup=PhotoImage(file=imgPATH+"lit_vert_haut_final.png").zoom(2)
+        beddown=PhotoImage(file=imgPATH+"lit_vert_bas_final.png").zoom(2)
+        wheelchair=PhotoImage(file=imgPATH+"fauteuil.png").zoom(2)
+        flowerpot=PhotoImage(file=imgPATH+"arbuste.png").zoom(2)
         img_stonelance=PhotoImage(file=imgPATH+"lancepierre.png").zoom(2)
         esc_up=PhotoImage(file=imgPATH+"escalier_up.png").zoom(2)
-        esc_down=PhotoImage(file=imgPATH+"escalier_down.png")
+        esc_down=PhotoImage(file=imgPATH+"escalier_down.png").zoom(2)
         vide = PhotoImage(file=imgPATH+"empty.png").zoom(2)
         hotbar = PhotoImage(file=imgPATH+"hotbar.png").zoom(2)
         faim100 = PhotoImage(file=imgPATH+"faim100.png").zoom(2)
@@ -1160,10 +1294,46 @@ class Game(object):
         vie =PhotoImage(file=imgPATH+"health.png")
         herobox = PhotoImage(file=imgPATH+"hero_box.png").zoom(3)
         dialoguebox = PhotoImage(file=imgPATH+"dialogue.png")
-        self.dicimages={"." : sol_img1,"," : sol_img2,"`" : sol_img3,"´" : sol_img4,"@" : [hero_fi,hero_bi,hero_li,hero_ri],"!" : pot_img3,"G" : ted_img,"W":ted_img,"O":sad_img,"B":ted_img,"D":ted_img,"s":bequille_img, "a" : img_stonelance,"!":pot_img1,"c":pot_img3,"b":or1_img,"j":or2_img,"p":or5_img,"P":or10_img,"M":marchand_f,'inventory':hotbar, 'faim100' : faim100 , 'faim75' : faim75 , 'faim50' : faim50 , 'faim25' : faim25 , 'faim0': faim0, 'empty' : vide , 'herobox' : herobox , 'health' : vie,'dialogue' : dialoguebox.zoom(5), ">" : esc_up, "<" : esc_down,"u":chew_img,"g":gum_img}
+        joie9= PhotoImage(file=imgPATH+"joie9.png")
+        joie8= PhotoImage(file=imgPATH+"joie8.png")
+        joie7= PhotoImage(file=imgPATH+"joie7.png")
+        joie6= PhotoImage(file=imgPATH+"joie6.png")
+        joie5= PhotoImage(file=imgPATH+"joie5.png")
+        joie4= PhotoImage(file=imgPATH+"joie4.png")
+        joie3= PhotoImage(file=imgPATH+"joie3.png")
+        joie2= PhotoImage(file=imgPATH+"joie2.png")
+        joie1= PhotoImage(file=imgPATH+"joie1.png")
+        sad9= PhotoImage(file=imgPATH+"sad9.png")
+        sad8= PhotoImage(file=imgPATH+"sad8.png")
+        sad7= PhotoImage(file=imgPATH+"sad7.png")
+        sad6= PhotoImage(file=imgPATH+"sad6.png")
+        sad5= PhotoImage(file=imgPATH+"sad5.png")
+        sad4= PhotoImage(file=imgPATH+"sad4.png")
+        sad3= PhotoImage(file=imgPATH+"sad3.png")
+        sad2= PhotoImage(file=imgPATH+"sad2.png")
+        sad1= PhotoImage(file=imgPATH+"sad1.png")
+        peur9= PhotoImage(file=imgPATH+"peur9.png")
+        peur8= PhotoImage(file=imgPATH+"peur8.png")
+        peur7= PhotoImage(file=imgPATH+"peur7.png")
+        peur6= PhotoImage(file=imgPATH+"peur6.png")
+        peur5= PhotoImage(file=imgPATH+"peur5.png")
+        peur4= PhotoImage(file=imgPATH+"peur4.png")
+        peur3= PhotoImage(file=imgPATH+"peur3.png")
+        peur2= PhotoImage(file=imgPATH+"peur2.png")
+        peur1= PhotoImage(file=imgPATH+"peur1.png")
+        angry9= PhotoImage(file=imgPATH+"angry9.png")
+        angry8= PhotoImage(file=imgPATH+"angry8.png")
+        angry7= PhotoImage(file=imgPATH+"angry7.png")
+        angry6= PhotoImage(file=imgPATH+"angry6.png")
+        angry5= PhotoImage(file=imgPATH+"angry5.png")
+        angry4= PhotoImage(file=imgPATH+"angry4.png")
+        angry3= PhotoImage(file=imgPATH+"angry3.png")
+        angry2= PhotoImage(file=imgPATH+"angry2.png")
+        angry1= PhotoImage(file=imgPATH+"angry1.png")
+        self.dicimages={"." : sol_img1,"," : sol_img2,"`" : sol_img3,"´" : sol_img4,"@" : [hero_fi,hero_bi,hero_li,hero_ri],"!" : pot_img3,"G" : ted_img,"W":ted_img,"O":sad_img,"B":ted_img,"D":ted_img,"s":bequille_img, "a" : img_stonelance,"!":pot_img1,"c":pot_img3,"b":or1_img,"j":or2_img,"p":or5_img,"P":or10_img,"M":marchand_f,'inventory':hotbar, 'faim100' : faim100 , 'faim75' : faim75 , 'faim50' : faim50 , 'faim25' : faim25 , 'faim0': faim0, 'empty' : vide , 'herobox' : herobox , 'health' : vie,'dialogue' : dialoguebox.zoom(5), ">" : esc_up, "<" : esc_down,"u":chew_img,"g":gum_img,"Be1":bedup,"Be2":beddown,"Fa":wheelchair,"Po":flowerpot,"s1":sucette1_img,"s2":sucette2_img,"s3":sucette3_img,"cc":cookiechoco_img}
         self.dicanim={"@":[hero_fw1,hero_bw1,hero_lw1,hero_rw1,hero_fw2,hero_bw2,hero_lw2,hero_rw2]}
         #dictionnaire pour avoir les images en zoom dans l'inventaire
-        self.dicinventory={"@" : hero_fi.zoom(2),"!" : pot_img3.zoom(2), "a" : img_stonelance.zoom(2),"s":bequille_img.zoom(2),"!":pot_img1.zoom(2),"c":pot_img3.zoom(2),"b":or1_img.zoom(2),"j":or2_img.zoom(2),"p":or5_img.zoom(2),"P":or10_img.zoom(2),"g":gum_img.zoom(2)}
+        self.dicinventory={"@" : hero_fi ,"!" : pot_img3 , "a" : img_stonelance ,"s":bequille_img ,"!":pot_img1 ,"c":pot_img3 ,"b":or1_img ,"j":or2_img ,"p":or5_img ,"P":or10_img ,"g":gum_img,"s1":sucette1_img.zoom(2),"s2":sucette2_img.zoom(2),"s3":sucette3_img.zoom(2),"cc":cookiechoco_img.zoom(2)}
         self.dicseen={"dy":dyel,"do":dora,"dl":dlig,"db":dblu,"dg":dgre,"dr":dred}
         self.dicviewable={"ye":yel,"or":ora,"li":lig,"bl":blu,"gr":gre,"re":red}
         self.canvas.config(width=1000,height=800)
@@ -1180,19 +1350,21 @@ class Game(object):
             self._actions[event.char](self.floor.hero)
         [self.fenetre.bind(i,nonefunc) for i in self._actions]
         self.hero.food()
+        if self.hero.tour%7==0:
+            self.hero.emotion_effect()
         self.floor.moveAllMonsters()
         self.seeMap()
         for i in range(3):
             print("TURN")
             self.updategraph(i,[self.floor.pos(self.hero),poshero])
             print(poshero,self.floor.pos(self.hero))
-            sleep(0.3)
+            sleep(delaianim)
         [self.fenetre.bind(i,self.gameturn) for i in self._actions]
 
     def updategraph(self,n=0,position=None) -> None:
         """Main graphic function.
         Displays the map on the canvas, using the images defined in initgraph.
-        Then adds the minimap on the corner of the screen (place not defined yet, currently (600,600)).
+        Then adds the minimap on the corner of the screen (place not defined yet, currently (650,800)).
         And ends the game if the Hero is dead."""
         y=0
         self.canvas.delete("all")
@@ -1200,20 +1372,29 @@ class Game(object):
         if position==None:
             poshero=self.floor.pos(self.hero)
         else:
-            poshero=position[0]+(position[0]-position[1])/(n+1)
+            poshero=((position[1]-position[0])*-(n+1-3))
+            poshero=Coord(poshero.x/3+position[0].x,poshero.y/3+position[0].y,broken=True)
+            if position[0]==position[1]:
+                n=2
         for i in self.viewablemap:
             x=0
             for k in i:
                 if k!=Map.empty:
-                    self.canvas.create_image(((Coord(x,y)-poshero)*64+Coord(401,400)).__index__(),image=self.dicimages.get(self.floor.blankmap[int(y)][int(x)]))
-                if k in self.dicimages:
-                    image=self.dicimages.get(k)
-                    if type(image) is list:
-                        self.canvas.create_image(((Coord(x,y)-poshero)*64+Coord(401,400)).__index__(),image=image[self.hero.facing.facing()] if n==0 else self.dicanim.get(k)[self.hero.facing.facing()+(4*(n-1))])
+                    self.canvas.create_image(((Coord(x,y)-poshero)*64+Coord(401,400)).ind(),image=self.dicimages.get(self.floor.blankmap[int(y)][int(x)]))
+                x+=1
+            y+=1
+        y=0
+        for i in self.viewablemap:
+            x=0
+            for k in i:
+                if k in self.dicimages and not(k in Map.listground):
+                    imagecase=self.dicimages.get(k)
+                    if type(imagecase) is list:             #                        self.canvas.create_image(((Coord(x,y)-poshero)*64+Coord(401,400)).__index__(),image=image[self.hero.facing.facing()] if n==0 else self.dicanim.get(k)[self.hero.facing.facing()+(4*(n-1))])
+                        self.canvas.create_image((Coord(401,400)).ind(),image=imagecase[self.hero.facing.facing()] if n==2 else self.dicanim.get(k)[self.hero.facing.facing()+(4*(n-2))])
                     else:
-                        self.canvas.create_image(((Coord(x,y)-poshero)*64+Coord(401,400)).__index__(),image=image)
-                else:
-                    self.canvas.create_text(((Coord(x,y)-poshero)*64+Coord(401,400)).__index__(),text=str(k),font="Arial 16")
+                        self.canvas.create_image(((Coord(x,y)-poshero)*64+Coord(401,400)).ind(),image=imagecase)
+                #else:
+                #    self.canvas.create_text(((Coord(x,y)-poshero)*64+Coord(401,400)).ind(),text=str(k),font="Arial 32")
                 x+=1
             y+=1
         #truc pour l'interface
