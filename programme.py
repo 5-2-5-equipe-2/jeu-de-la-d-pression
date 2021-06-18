@@ -1355,13 +1355,13 @@ class Game(object):
         self.floor.moveAllMonsters()
         self.seeMap()
         for i in range(3):
-            print("TURN")
-            self.updategraph(i,[self.floor.pos(self.hero),poshero])
-            print(poshero,self.floor.pos(self.hero))
+            #print("TURN")
+            self.updategraph(i,[self.floor.pos(self.hero),poshero],i==2)
+            #print(poshero,self.floor.pos(self.hero))
             sleep(delaianim)
         [self.fenetre.bind(i,self.gameturn) for i in self._actions]
 
-    def updategraph(self,n=0,position=None) -> None:
+    def updategraph(self,n=0,position=None,last=False) -> None:
         """Main graphic function.
         Displays the map on the canvas, using the images defined in initgraph.
         Then adds the minimap on the corner of the screen (place not defined yet, currently (650,800)).
@@ -1387,10 +1387,10 @@ class Game(object):
         for i in self.viewablemap:
             x=0
             for k in i:
-                if k in self.dicimages and not(k in Map.listground):
+                if k!=Map.empty and k in self.dicimages and not(k in Map.listground):
                     imagecase=self.dicimages.get(k)
                     if type(imagecase) is list:             #                        self.canvas.create_image(((Coord(x,y)-poshero)*64+Coord(401,400)).__index__(),image=image[self.hero.facing.facing()] if n==0 else self.dicanim.get(k)[self.hero.facing.facing()+(4*(n-1))])
-                        self.canvas.create_image((Coord(401,400)).ind(),image=imagecase[self.hero.facing.facing()] if n==2 else self.dicanim.get(k)[self.hero.facing.facing()+(4*(n-2))])
+                        self.canvas.create_image(Coord(401,400).ind(),image=imagecase[self.hero.facing.facing()] if n==2 else self.dicanim.get(k)[self.hero.facing.facing()+(4*(n-2))])
                     else:
                         self.canvas.create_image(((Coord(x,y)-poshero)*64+Coord(401,400)).ind(),image=imagecase)
                 #else:
@@ -1447,7 +1447,7 @@ class Game(object):
         #affichage des dialogue dans la boite de dialogue
         self.canvas.create_image(420,710,image = self.dicimages['dialogue'])
 
-        if position == None or n==2:
+        if last:
             self.canvas.create_text(500,750,text=self.readMessages(),font="Arial 25 italic",fill="white")
         #inventaire ecrit: self.canvas.create_text(500,770,text=self.floor.hero.description(),font="Arial 16 italic",fill="white")
         #fin de la boite de dialogue
