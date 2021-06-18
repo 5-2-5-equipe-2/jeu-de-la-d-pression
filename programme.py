@@ -8,17 +8,24 @@ from tkinter import *
 import copy
 import math
 
-delaianim=0
+delaianim=0.05
 
 def nonefunc(x=0,y=0,z=0):
     "test"
     return
 
-def sign(x : float) -> Literal[-1,1]:
+def sign(x : float) :
     "Returns the sign of a float"
     if x==0:
         return 0
     return -1 if x<0 else 1
+
+def newsign(x):
+    if x == 0:
+        return 0
+    elif x >0:
+        return 1
+    return -1
 
 def heal(creature) -> True:
     """Heals a creature \n
@@ -62,31 +69,40 @@ def getch():
         return msvcrt.getch().decode('utf-8')
 
 def tir(unique):
-    devant= theGame().floor._elem[theGame().floor.hero]
-    i=5
-    while(((devant+theGame().floor.hero.facing) in theGame().floor) and theGame().floor.get(devant+theGame().floor.hero.facing) in theGame().floor.listground and i!=0):
-        devant+=theGame().floor.hero.facing
-        i-=1
-    if ((devant+theGame().floor.hero.facing) in theGame().floor) and isinstance(theGame().floor.get(devant+theGame().floor.hero.facing),Hero):
-        #theGame().floor.get(Devant+theGame().floor.hero.facing).meet(hero)
-        if theGame().floor.get(devant+theGame().floor.hero.facing).meet(theGame().floor.hero) == True:
-            theGame().floor.rm(devant+theGame().floor.hero.facing)
-
-def jet(unique):
-    "Throw the item"
     Devant= theGame().floor._elem[theGame().floor.hero]+theGame().floor.hero.facing
     i=5
-    while((Devant+theGame().floor.hero.facing in theGame().floor) and theGame().floor.get(Devant+theGame().floor.hero.facing)in theGame().floor.listground and i!=0):
-        Devant+=theGame().floor.hero.facing
-        i-=1
-    if ((Devant+theGame().floor.hero.facing) in theGame().floor) and isinstance(theGame().floor.get(Devant+theGame().floor.hero.facing),Creature):
-        theGame().floor.get(Devant+theGame().floor.hero.facing).action+=8
-    elif ((Devant+theGame().floor.hero.facing) in theGame().floor) and theGame().floor.get(Devant+theGame().floor.hero.facing)in theGame().floor.listground:
-        theGame().floor.put(Devant+theGame().floor.hero.facing, Used("used chewing-gum","u"))
-    elif ((Devant+theGame().floor.hero.facing) in theGame().floor) and isinstance(theGame().floor.get(Devant+theGame().floor.hero.facing), Equipment) or (Devant+theGame().floor.hero.facing) in theGame().floor and theGame().floor.get(Devant+theGame().floor.hero.facing)== theGame().floor.empty:
-       
-        theGame().floor.put(Devant,Used("used chewing-gum","u"))
+    if isinstance(theGame().floor.get(Devant),Creature):
+        theGame().floor.get(Devant).meet(theGame().floor.hero)
+
+        if theGame().floor.get(Devant).meet(theGame().floor.hero) == True:
+                theGame().floor.rm(Devant)
     else:
+        while((Devant+theGame().floor.hero.facing in theGame().floor) and theGame().floor.get(Devant+theGame().floor.hero.facing)in theGame().floor.listground and i!=0):
+            if (isinstance(theGame().floor.get(Devant+theGame().floor.hero.facing), Creature)):
+                theGame().floor.get(Devant+theGame().floor.hero.facing).meet(theGame().floor.hero)
+                i=0
+            Devant+=theGame().floor.hero.facing
+
+            if theGame().floor.get(Devant+theGame().floor.hero.facing).meet(theGame().floor.hero) == True:
+                theGame().floor.rm(Devant+theGame().floor.hero.facing)
+
+            Devant+=theGame().floor.hero.facing
+            i-=1
+
+def jet(unique):
+    "Throw the chewing-gum"
+    Devant= theGame().floor._elem[theGame().floor.hero]+theGame().floor.hero.facing
+    i=5
+    if isinstance(theGame().floor.get(Devant),Creature):
+        theGame().floor.get(Devant).action+=8
+    else:
+        while((Devant+theGame().floor.hero.facing in theGame().floor) and theGame().floor.get(Devant+theGame().floor.hero.facing)in theGame().floor.listground and i!=0):
+            if (isinstance(theGame().floor.get(Devant+theGame().floor.hero.facing), Creature)):
+                theGame().floor.get(Devant+theGame().floor.hero.facing).action+=8
+                i=0
+
+            Devant+=theGame().floor.hero.facing
+            i-=1
         theGame().floor.put(Devant, Used("used chewing-gum","u"))
     return unique
 
@@ -297,7 +313,7 @@ class Decoration(Element):
 
 class Creature(Element):
     "Element with hps and strength, movable in a Map"
-    def __init__(self,name,hp,abbrv=None,strength=1,defense=0,inventory=[],equips=[None,None,None,None],bourse=0,vitesse=1,level=1,action=0,power=None):
+    def __init__(self,name,hp,abbrv=None,strength=1,defense=0,inventory=[],equips=[None,None,None,None],bourse=0,vitesse=1,level=1,action=0,power=None,special=None):
         Element.__init__(self,name,abbrv,transparent=True)
         self.hp=int(hp*(1.5**level))
         self.hpmax=self.hp
@@ -314,6 +330,7 @@ class Creature(Element):
         self.facing=Coord(0,0)
         self.action=action
         self.power=power
+        self.special=special
 
     def description(self) -> str:
         "Description of the Creature"
@@ -324,25 +341,29 @@ class Creature(Element):
         self.hp-=(other.strength-random.randint(0,self.defense))
         if other.power!=None:
             self.listeffects.append(other.power)
-        theGame().addMessage(f"Le {other.name} hits le {self.description()}")
+        theGame().addMessage(f"Le {other.name} hits le {self.name}")
+        if self.special!=None and isinstance(other,Hero):
+            self.special(self)
+        if other.special!=None and isinstance(self,Hero):
+            other.special(other)
         if self.hp<=0:
             return other.gainxp(self)
         return False
 
-    def statuslose(self,status : Status):
+    def statuslose(self,status : Status) -> None:
         "Make the Creature be affected by its statuses"
         if status.cible in self.__dict__:
             if random.random<status.prb:
                 self.__setitem__(status.cible,self.__getitem__(status.cible)+status.effect)
 
-    def creaturn(self):
+    def creaturn(self) -> None:
         "Move a creature where it has to go, and affect it with its statuses"
         #if len(self.dpl)==0:
             #recalculer l'itinéraire
             #print("jesépakoifer")
         #theGame().floor.move(self,self.dpl[0])
         #self.dpl.pop(0)
-        self.action-=1
+
         for status in self.listeffects:
             if not(status.permanent):
                 self.statuslose(status)
@@ -356,7 +377,7 @@ class Creature(Element):
             return False
         raise TypeError
 
-    def gainxp(self,creature):
+    def gainxp(self,creature) -> True:
         "Killing a Creature makes you gain xp."
         self.xp+= creature.xp
         if self.xp>=5+5*self.level:
@@ -364,7 +385,7 @@ class Creature(Element):
             self.levelup()
         return True
 
-    def levelup(self):
+    def levelup(self) -> None:
         "Level up : stats are increased"
         self.hpmax+=2
         self.level+=1
@@ -372,7 +393,7 @@ class Creature(Element):
         self.hp=self.hpmax
         theGame().addMessage(f"Le {self.description} a gagné un niveau!(niveau {self.level})")
 
-    def throw(self,equip):
+    def throw(self,equip) -> None:
         "Throws the item"
         devant= theGame().floor._elem[self]+self.facing
         i=5
@@ -386,6 +407,9 @@ class Creature(Element):
         elif ((devant+self.facing) in theGame().floor) and (isinstance(theGame().floor.get(devant+self.facing), Equipment) or theGame().floor.get(devant+self.facing)==Map.empty):
             theGame().floor.put(devant,equip if equip.used=="idem" else copy.copy(equip.used))
         self._inventory.remove(equip)
+
+    def unhide(self,newabbrv) -> None:
+        self.abbrv=newabbrv
 
 class Pills(Element):
     "Pills are the game's money: we find them randomly in the game, they have a value according to their gold value."
@@ -461,6 +485,7 @@ class Hero(Creature):
         self.tour=0
         self.famine=False
         self.satieteInit=satiete
+        self.distvision=6
 
     def description(self) -> str:
         "Short description of the Hero."
@@ -530,12 +555,12 @@ class Hero(Creature):
         "Affects the hero according to its emotions"
         #joie
         if self.joie>=90:
-            self.hp+=2
+            self.hp=min(self.hp+2,self.hpmax)
             self.tristesse-=2
             self.colere-=1
             self.peur-=1
         elif self.joie>=80:
-            self.hp+=1
+            self.hp=min(self.hp+1,self.hpmax)
             self.tristesse-=1
             self.colere-=1
             self.peur-=1
@@ -555,13 +580,13 @@ class Hero(Creature):
             self.colere+=1
             self.peur+=10
         #tristesse
+        self.distvision=2.5*self.tristesse/100+2.5
         if self.tristesse<=10:
-            self.hp+=2
+            self.hp=min(self.hp+2,self.hpmax)
             self.joie+=2
             self.peur-=1
         elif self.tristesse<=90:
             self.hp-=1
-            #reduire le champ de vision
         #peur
         if self.peur<=10:
             self.hp+=2
@@ -883,7 +908,7 @@ class Map(object):
     def put(self,coord : Coord,element : Element) -> None:
         "Puts an Element at the given Coord."
         if type(coord) is type(None) or type(element) is type(None):
-            return 
+            return
         self.checkCoord(coord)
         self.checkElement(element)
         if self[coord]==self.empty or (isinstance(self[coord],Element)) or (isinstance(self[coord],Special_ground)):
@@ -1020,67 +1045,68 @@ class Map(object):
                 if i.action>0:
                     i.action-=1
                     pass
-                if self._elem[i].distance(self._elem[self.hero])<=1 :
-                    self.hero.meet(i)
-                elif self._elem[i].distance(self._elem[self.hero])<6:
-                    posmonstre = self.pos(i)
-                    poshero = self.pos(self.hero)
-                    new = posmonstre - poshero
-                    way1 = Coord(-sign(new.x),-sign(new.y))               
-                    #diagonale 'imparfaite'
-                    if ((way1.x and way1.y) != 0) and (self._elem[i].cosinus(self._elem[self.hero]) != (1/math.sqrt(2) or -1/math.sqrt(2))):
-                        way2 = self._elem[i].direction(self._elem[self.hero])
-                        #creation de way3 et way4
-                        if way2.y ==0:
-                            way3 = Coord(way2.x,-way1.y)
-                            way4 = Coord(0,way1.y)
-                        else:
-                            way3 = Coord(-way1.x, way2.y)
-                            way4 = Coord(way1.x , 0)
-                        way5 = 0
-                    #diagonales 'parfaites'
-                    elif (way1.x and way1.y) != 0 :
-                        #creation de way2, way3, way4, way5
-                        way2 = Coord(0,way1.y)
-                        way3 = Coord(way1.x,0)
-                        way4 = Coord(way1.x,-way1.y)
-                        way5 = Coord(-way1.x,way1.y)
+                else:
+                    if self._elem[i].distance(self._elem[self.hero])<=1 :
+                        self.hero.meet(i)
+                    elif self._elem[i].distance(self._elem[self.hero])<6:
+                        posmonstre = self.pos(i)
+                        poshero = self.pos(self.hero)
+                        new = posmonstre - poshero
+                        way1 = Coord(-sign(new.x),-sign(new.y))
+                        #diagonale 'imparfaite'
+                        if ((way1.x and way1.y) != 0) and (self._elem[i].cosinus(self._elem[self.hero]) != (1/math.sqrt(2) or -1/math.sqrt(2))):
+                            way2 = self._elem[i].direction(self._elem[self.hero])
+                            #creation de way3 et way4
+                            if way2.y ==0:
+                                way3 = Coord(way2.x,-way1.y)
+                                way4 = Coord(0,way1.y)
+                            else:
+                                way3 = Coord(-way1.x, way2.y)
+                                way4 = Coord(way1.x , 0)
+                            way5 = 0
+                        #diagonales 'parfaites'
+                        elif (way1.x and way1.y) != 0 :
+                            #creation de way2, way3, way4, way5
+                            way2 = Coord(0,way1.y)
+                            way3 = Coord(way1.x,0)
+                            way4 = Coord(way1.x,-way1.y)
+                            way5 = Coord(-way1.x,way1.y)
 
-                    #cas ou le monstre doit se deplacer en ligne droite
-                    else :
-                        if way1.x ==0:
-                            way2 = Coord(1,way1.y)
-                            way3 = Coord(-1,way1.y)
-                            way4 = Coord(1,0)
-                            way5 = Coord(-1,0)
-                        else:
-                            way2 = Coord(way1.x,1)
-                            way3 = Coord(way1.x,-1)
-                            way4 = Coord(0,1)
-                            way5 = Coord(0,-1)
+                        #cas ou le monstre doit se deplacer en ligne droite
+                        else :
+                            if way1.x ==0:
+                                way2 = Coord(1,way1.y)
+                                way3 = Coord(-1,way1.y)
+                                way4 = Coord(1,0)
+                                way5 = Coord(-1,0)
+                            else:
+                                way2 = Coord(way1.x,1)
+                                way3 = Coord(way1.x,-1)
+                                way4 = Coord(0,1)
+                                way5 = Coord(0,-1)
 
-                    #cas ou il n'y a aucun obstacle devant la premiere direction (on privilegie le deplacement en diagonale)
-                    if self.get(self._elem[i]+way1) in self.listground or isinstance(self.get(self._elem[i]+way1),Used) :
-                        self.move(i,way1)
+                        #cas ou il n'y a aucun obstacle devant la premiere direction (on privilegie le deplacement en diagonale)
+                        if (self._elem[i]+way1) in self and self.get(self._elem[i]+way1) in self.listground or isinstance(self.get(self._elem[i]+way1),Used) :
+                            self.move(i,way1)
 
-                    #cas ou il y a un obstacle devant la premiere direction possible, on choisi donc la deuxieme direction possible
-                    elif self.get(self._elem[i]+way2) in self.listground  or isinstance(self.get(self._elem[i]+way2),Used) :
-                        self.move(i,way2)
+                        #cas ou il y a un obstacle devant la premiere direction possible, on choisi donc la deuxieme direction possible
+                        elif (self._elem[i]+way2) in self and self.get(self._elem[i]+way2) in self.listground  or isinstance(self.get(self._elem[i]+way2),Used) :
+                            self.move(i,way2)
 
-                    #cas ou il y a un obstacle devant la premiere et deuxieme direction possible, on choisi donc la troisieme direction possible
-                    elif self.get(self._elem[i]+way3) in self.listground or isinstance(self.get(self._elem[i]+way3),Used) :
-                        self.move(i,way3)
+                        #cas ou il y a un obstacle devant la premiere et deuxieme direction possible, on choisi donc la troisieme direction possible
+                        elif (self._elem[i]+way3) in self and self.get(self._elem[i]+way3) in self.listground or isinstance(self.get(self._elem[i]+way3),Used) :
+                            self.move(i,way3)
 
-                    #cas ou il y a un obstacle devant la premiere, deuxieme et troisieme direction possible, on choisi donc la quatrieme direction possible
-                    elif self.get(self._elem[i]+way4) in self.listground or isinstance(self.get(self._elem[i]+way4),Used) :
-                        self.move(i,way4)
+                        #cas ou il y a un obstacle devant la premiere, deuxieme et troisieme direction possible, on choisi donc la quatrieme direction possible
+                        elif (self._elem[i]+way4) in self and self.get(self._elem[i]+way4) in self.listground or isinstance(self.get(self._elem[i]+way4),Used) :
+                            self.move(i,way4)
 
-                    #cas ou il y a un obstacle devant la premiere, deuxieme ,troisieme et quatrieme direction possible, on choisi donc la cinquieme direction possible
-                    elif (self.get(self._elem[i]+way5) in self.listground  or isinstance(self.get(self._elem[i]+way1),Used)) and way5 !=0 :
-                        self.move(i,way5)
+                        #cas ou il y a un obstacle devant la premiere, deuxieme ,troisieme et quatrieme direction possible, on choisi donc la cinquieme direction possible
+                        elif ((self._elem[i]+way5) in self and self.get(self._elem[i]+way5) in self.listground  or isinstance(self.get(self._elem[i]+way1),Used)) and isinstance(way5,Coord) :
+                            self.move(i,way5)
 
-                else: #si le monstre est trop loin du hero, il a 25%  de chance de faire un deplacement completement aleatoire)
-                    if random.randint(0,3)==0:
+                    else: #si le monstre est trop loin du hero, il a 25%  de chance de faire un deplacement completement aleatoire)
+                        if random.randint(0,3)==0:
                             self.move(i,Coord(random.randint(-1,1),random.randint(-1,1)))
 
     def checkCoord(self,coord) -> None:
@@ -1150,7 +1176,7 @@ class Game(object):
               "u" : lambda hero : hero.use(theGame().select(hero._inventory)),
               "j" : lambda hero : hero.throw(theGame().select(hero._inventory))}
     monsters = { 0: [ Creature("Goblin",4), Creature("Bat",2,"W") ],
-                 1: [ Creature("Ork",6,strength=2), Creature("Blob",10) ],
+                 1: [ Creature("Ork",6,strength=2), Creature("Blob",10), Creature("Fantome",4,"fi",special=lambda creature: creature.unhide("fv"))],
                  5: [ Creature("Dragon",20,strength=3)]}
     equipments = { 0: [ Weapon("épée",3,37,"s",f=True),Equipment("gum","g", usage=lambda creature: jet(True),used=Used("used chewing-gum","u")) ,Equipment("potion","!",usage=lambda creature : heal(creature),f=True), Pills("or1","b",valeur_pillule=1), Equipment("sucette baveuse","s1",usage=lambda creature : eat(creature,1),f=True)],
                    1: [ Equipment("lance-pierre","a", usage=lambda creature: tir(False)),Equipment("potion","!",usage= lambda creature : teleport(creature,True),f=True) ,Pills("or2","j",valeur_pillule=2),Equipment("sucette croquée","s2",usage=lambda creature : eat(creature,3),f=True)],
@@ -1253,8 +1279,8 @@ class Game(object):
         sucette1_img=PhotoImage(file=imgPATH+"sucette_1.png")
         sucette2_img=PhotoImage(file=imgPATH+"sucette_2.png")
         sucette3_img=PhotoImage(file=imgPATH+"sucette_3.png")
-        cookiechoco_img=PhotoImage(file=imgPATH+"cookie_chocolat.png")
         ted_img=PhotoImage(file=imgPATH+"ourson_1.png").zoom(2)
+        ghost_img=PhotoImage(file=imgPATH+"ghost.png").zoom(2)
         sad_img=PhotoImage(file=imgPATH+"tristesse_1.png").zoom(2)
         or1_img=PhotoImage(file=imgPATH+"or1.png").zoom(2)
         or2_img=PhotoImage(file=imgPATH+"or2.png").zoom(2)
@@ -1272,13 +1298,13 @@ class Game(object):
         img_stonelance=PhotoImage(file=imgPATH+"lancepierre.png").zoom(2)
         esc_up=PhotoImage(file=imgPATH+"escalier_up.png").zoom(2)
         esc_down=PhotoImage(file=imgPATH+"escalier_down.png").zoom(2)
-        vide = PhotoImage(file=imgPATH+"empty.png").zoom(2)
-        hotbar = PhotoImage(file=imgPATH+"hotbar.png").zoom(2)
-        faim100 = PhotoImage(file=imgPATH+"faim100.png").zoom(2)
-        faim75 = PhotoImage(file=imgPATH+"faim75.png").zoom(2)
-        faim50 = PhotoImage(file=imgPATH+"faim50.png").zoom(2)
-        faim25 = PhotoImage(file=imgPATH+"faim25.png").zoom(2)
-        faim0 = PhotoImage(file=imgPATH+"faim0.png").zoom(2)
+        vide=PhotoImage(file=imgPATH+"empty.png").zoom(2)
+        hotbar=PhotoImage(file=imgPATH+"hotbar.png").zoom(2)
+        faim100=PhotoImage(file=imgPATH+"faim100.png").zoom(2)
+        faim75=PhotoImage(file=imgPATH+"faim75.png").zoom(2)
+        faim50=PhotoImage(file=imgPATH+"faim50.png").zoom(2)
+        faim25=PhotoImage(file=imgPATH+"faim25.png").zoom(2)
+        faim0=PhotoImage(file=imgPATH+"faim0.png").zoom(2)
         red=PhotoImage(file=imgPATH+"red.png")
         dred=PhotoImage(file=imgPATH+"darkred.png")
         gre=PhotoImage(file=imgPATH+"green.png")
@@ -1292,50 +1318,65 @@ class Game(object):
         ora=PhotoImage(file=imgPATH+"orange.png")
         dora=PhotoImage(file=imgPATH+"darkorange.png")
         vie =PhotoImage(file=imgPATH+"health.png")
-        herobox = PhotoImage(file=imgPATH+"hero_box.png").zoom(3)
-        dialoguebox = PhotoImage(file=imgPATH+"dialogue.png")
-        joie9= PhotoImage(file=imgPATH+"joie9.png")
-        joie8= PhotoImage(file=imgPATH+"joie8.png")
-        joie7= PhotoImage(file=imgPATH+"joie7.png")
-        joie6= PhotoImage(file=imgPATH+"joie6.png")
-        joie5= PhotoImage(file=imgPATH+"joie5.png")
-        joie4= PhotoImage(file=imgPATH+"joie4.png")
-        joie3= PhotoImage(file=imgPATH+"joie3.png")
-        joie2= PhotoImage(file=imgPATH+"joie2.png")
-        joie1= PhotoImage(file=imgPATH+"joie1.png")
-        sad9= PhotoImage(file=imgPATH+"sad9.png")
-        sad8= PhotoImage(file=imgPATH+"sad8.png")
-        sad7= PhotoImage(file=imgPATH+"sad7.png")
-        sad6= PhotoImage(file=imgPATH+"sad6.png")
-        sad5= PhotoImage(file=imgPATH+"sad5.png")
-        sad4= PhotoImage(file=imgPATH+"sad4.png")
-        sad3= PhotoImage(file=imgPATH+"sad3.png")
-        sad2= PhotoImage(file=imgPATH+"sad2.png")
-        sad1= PhotoImage(file=imgPATH+"sad1.png")
-        peur9= PhotoImage(file=imgPATH+"peur9.png")
-        peur8= PhotoImage(file=imgPATH+"peur8.png")
-        peur7= PhotoImage(file=imgPATH+"peur7.png")
-        peur6= PhotoImage(file=imgPATH+"peur6.png")
-        peur5= PhotoImage(file=imgPATH+"peur5.png")
-        peur4= PhotoImage(file=imgPATH+"peur4.png")
-        peur3= PhotoImage(file=imgPATH+"peur3.png")
-        peur2= PhotoImage(file=imgPATH+"peur2.png")
-        peur1= PhotoImage(file=imgPATH+"peur1.png")
-        angry9= PhotoImage(file=imgPATH+"angry9.png")
-        angry8= PhotoImage(file=imgPATH+"angry8.png")
-        angry7= PhotoImage(file=imgPATH+"angry7.png")
-        angry6= PhotoImage(file=imgPATH+"angry6.png")
-        angry5= PhotoImage(file=imgPATH+"angry5.png")
-        angry4= PhotoImage(file=imgPATH+"angry4.png")
-        angry3= PhotoImage(file=imgPATH+"angry3.png")
-        angry2= PhotoImage(file=imgPATH+"angry2.png")
-        angry1= PhotoImage(file=imgPATH+"angry1.png")
-        self.dicimages={"." : sol_img1,"," : sol_img2,"`" : sol_img3,"´" : sol_img4,"@" : [hero_fi,hero_bi,hero_li,hero_ri],"!" : pot_img3,"G" : ted_img,"W":ted_img,"O":sad_img,"B":ted_img,"D":ted_img,"s":bequille_img, "a" : img_stonelance,"!":pot_img1,"c":pot_img3,"b":or1_img,"j":or2_img,"p":or5_img,"P":or10_img,"M":marchand_f,'inventory':hotbar, 'faim100' : faim100 , 'faim75' : faim75 , 'faim50' : faim50 , 'faim25' : faim25 , 'faim0': faim0, 'empty' : vide , 'herobox' : herobox , 'health' : vie,'dialogue' : dialoguebox.zoom(5), ">" : esc_up, "<" : esc_down,"u":chew_img,"g":gum_img,"Be1":bedup,"Be2":beddown,"Fa":wheelchair,"Po":flowerpot,"s1":sucette1_img,"s2":sucette2_img,"s3":sucette3_img,"cc":cookiechoco_img}
+
+        herobox0=PhotoImage(file=imgPATH+"box0.png").zoom(3)
+        herobox10=PhotoImage(file=imgPATH+"box10.png").zoom(3)
+        herobox20=PhotoImage(file=imgPATH+"box20.png").zoom(3)
+        herobox30=PhotoImage(file=imgPATH+"box30.png").zoom(3)
+        herobox40=PhotoImage(file=imgPATH+"box40.png").zoom(3)
+        herobox50=PhotoImage(file=imgPATH+"box50.png").zoom(3)
+        herobox60=PhotoImage(file=imgPATH+"box60.png").zoom(3)
+        herobox70=PhotoImage(file=imgPATH+"box70.png").zoom(3)
+        herobox80=PhotoImage(file=imgPATH+"box80.png").zoom(3)
+        herobox90=PhotoImage(file=imgPATH+"box90.png").zoom(3)
+
+        dialoguebox=PhotoImage(file=imgPATH+"dialogue.png")
+
+        joie9=PhotoImage(file=imgPATH+"joie9.png")
+        joie8=PhotoImage(file=imgPATH+"joie8.png")
+        joie7=PhotoImage(file=imgPATH+"joie7.png")
+        joie6=PhotoImage(file=imgPATH+"joie6.png")
+        joie5=PhotoImage(file=imgPATH+"joie5.png")
+        joie4=PhotoImage(file=imgPATH+"joie4.png")
+        joie3=PhotoImage(file=imgPATH+"joie3.png")
+        joie2=PhotoImage(file=imgPATH+"joie2.png")
+        joie1=PhotoImage(file=imgPATH+"joie1.png")
+        sad9=PhotoImage(file=imgPATH+"sad9.png")
+        sad8=PhotoImage(file=imgPATH+"sad8.png")
+        sad7=PhotoImage(file=imgPATH+"sad7.png")
+        sad6=PhotoImage(file=imgPATH+"sad6.png")
+        sad5=PhotoImage(file=imgPATH+"sad5.png")
+        sad4=PhotoImage(file=imgPATH+"sad4.png")
+        sad3=PhotoImage(file=imgPATH+"sad3.png")
+        sad2=PhotoImage(file=imgPATH+"sad2.png")
+        sad1=PhotoImage(file=imgPATH+"sad1.png")
+        peur9=PhotoImage(file=imgPATH+"peur9.png")
+        peur8=PhotoImage(file=imgPATH+"peur8.png")
+        peur7=PhotoImage(file=imgPATH+"peur7.png")
+        peur6=PhotoImage(file=imgPATH+"peur6.png")
+        peur5=PhotoImage(file=imgPATH+"peur5.png")
+        peur4=PhotoImage(file=imgPATH+"peur4.png")
+        peur3=PhotoImage(file=imgPATH+"peur3.png")
+        peur2=PhotoImage(file=imgPATH+"peur2.png")
+        peur1=PhotoImage(file=imgPATH+"peur1.png")
+        angry9=PhotoImage(file=imgPATH+"angry9.png")
+        angry8=PhotoImage(file=imgPATH+"angry8.png")
+        angry7=PhotoImage(file=imgPATH+"angry7.png")
+        angry6=PhotoImage(file=imgPATH+"angry6.png")
+        angry5=PhotoImage(file=imgPATH+"angry5.png")
+        angry4=PhotoImage(file=imgPATH+"angry4.png")
+        angry3=PhotoImage(file=imgPATH+"angry3.png")
+        angry2=PhotoImage(file=imgPATH+"angry2.png")
+        angry1=PhotoImage(file=imgPATH+"angry1.png")
+        equipBar=PhotoImage(file=imgPATH+"equipBar.png")
+        self.dicimages={'showcase': hero_fi.zoom(3),"." : sol_img1,"," : sol_img2,"`" : sol_img3,"´" : sol_img4,"@" : [hero_fi,hero_bi,hero_li,hero_ri],"!" : pot_img3,"G" : ted_img,"W":ted_img,"O":sad_img,"B":ted_img,"D":ted_img, "fv":ghost_img ,"s":bequille_img, "a" : img_stonelance,"!":pot_img1,"c":pot_img3,"b":or1_img,"j":or2_img,"p":or5_img,"P":or10_img,"M":marchand_f,'inventory':hotbar, 'faim100' : faim100 , 'faim75' : faim75 , 'faim50' : faim50 , 'faim25' : faim25 , 'faim0': faim0, 'empty' : vide , 'health' : vie,'dialogue' : dialoguebox.zoom(5), ">" : esc_up, "<" : esc_down,"u":chew_img,"g":gum_img,"Be1":bedup,"Be2":beddown,"Fa":wheelchair,"Po":flowerpot,"s1":sucette1_img,"s2":sucette2_img,"s3":sucette3_img,'herobox0':herobox0,'herobox10':herobox10,'herobox20':herobox20,'herobox30':herobox30,'herobox40':herobox40,'herobox50':herobox50,'herobox60':herobox60,'herobox70':herobox70,'herobox80':herobox80,'herobox90':herobox90}
         self.dicanim={"@":[hero_fw1,hero_bw1,hero_lw1,hero_rw1,hero_fw2,hero_bw2,hero_lw2,hero_rw2]}
         #dictionnaire pour avoir les images en zoom dans l'inventaire
-        self.dicinventory={"@" : hero_fi ,"!" : pot_img3 , "a" : img_stonelance ,"s":bequille_img ,"!":pot_img1 ,"c":pot_img3 ,"b":or1_img ,"j":or2_img ,"p":or5_img ,"P":or10_img ,"g":gum_img,"s1":sucette1_img.zoom(2),"s2":sucette2_img.zoom(2),"s3":sucette3_img.zoom(2),"cc":cookiechoco_img.zoom(2)}
+        self.dicinventory={"equipBar":equipBar,"@" : hero_fi ,"!" : pot_img3 , "a" : img_stonelance ,"s":bequille_img ,"!":pot_img1 ,"c":pot_img3 ,"b":or1_img ,"j":or2_img ,"p":or5_img ,"P":or10_img ,"g":gum_img,"s1":sucette1_img.zoom(2),"s2":sucette2_img.zoom(2),"s3":sucette3_img.zoom(2)}
         self.dicseen={"dy":dyel,"do":dora,"dl":dlig,"db":dblu,"dg":dgre,"dr":dred}
         self.dicviewable={"ye":yel,"or":ora,"li":lig,"bl":blu,"gr":gre,"re":red}
+
+        self.dicemotion = {'joy1':joie1,'joy2':joie2,'joy3':joie3,'joy4':joie4,'joy5':joie5,'joy6':joie6,'joy7':joie7,'joy8':joie8,'joy9':joie9,'sad1':sad1,'sad2':sad2,'sad3':sad3,'sad4':sad4,'sad5':sad5,'sad6':sad6,'sad7':sad7,'sad8':sad8,'sad9':sad9, 'peur1': peur1,'peur2': peur2,'peur3': peur3,'peur4': peur4,'peur5': peur5,'peur6': peur6,'peur7': peur7,'peur8': peur8,'peur9': peur9,'angry1':angry1,'angry2':angry2,'angry3':angry3,'angry4':angry4,'angry5':angry5,'angry6':angry6,'angry7':angry7,'angry8':angry8,'angry9':angry9}
         self.canvas.config(width=1000,height=800)
         self.seeMap()
         self.updategraph()
@@ -1355,9 +1396,9 @@ class Game(object):
         self.floor.moveAllMonsters()
         self.seeMap()
         for i in range(3):
-            #print("TURN")
+            print("TURN")
             self.updategraph(i,[self.floor.pos(self.hero),poshero],i==2)
-            #print(poshero,self.floor.pos(self.hero))
+            print(poshero,self.floor.pos(self.hero))
             sleep(delaianim)
         [self.fenetre.bind(i,self.gameturn) for i in self._actions]
 
@@ -1387,10 +1428,10 @@ class Game(object):
         for i in self.viewablemap:
             x=0
             for k in i:
-                if k!=Map.empty and k in self.dicimages and not(k in Map.listground):
+                if k in self.dicimages and not(k in Map.listground):
                     imagecase=self.dicimages.get(k)
                     if type(imagecase) is list:             #                        self.canvas.create_image(((Coord(x,y)-poshero)*64+Coord(401,400)).__index__(),image=image[self.hero.facing.facing()] if n==0 else self.dicanim.get(k)[self.hero.facing.facing()+(4*(n-1))])
-                        self.canvas.create_image(Coord(401,400).ind(),image=imagecase[self.hero.facing.facing()] if n==2 else self.dicanim.get(k)[self.hero.facing.facing()+(4*(n-2))])
+                        self.canvas.create_image((Coord(401,400)).ind(),image=imagecase[self.hero.facing.facing()] if n==2 else self.dicanim.get(k)[self.hero.facing.facing()+(4*(n-2))])
                     else:
                         self.canvas.create_image(((Coord(x,y)-poshero)*64+Coord(401,400)).ind(),image=imagecase)
                 #else:
@@ -1403,32 +1444,61 @@ class Game(object):
             #affiche  le niveau de satiete grace a un cookie
             satiete = theGame().floor.hero.satiete*5
             if satiete >= 100:
-                self.canvas.create_image(750,150,image = self.dicimages['faim100'])
+                self.canvas.create_image(950,70,image = self.dicimages['faim100'])
             elif satiete >= 75:
-                self.canvas.create_image(750,150,image = self.dicimages['faim75'])
+                self.canvas.create_image(950,70,image = self.dicimages['faim75'])
             elif satiete >= 50:
-                self.canvas.create_image(750,150,image = self.dicimages['faim50'])
+                self.canvas.create_image(950,70,image = self.dicimages['faim50'])
             elif satiete >= 25:
-                self.canvas.create_image(750,150,image = self.dicimages['faim25'])
+                self.canvas.create_image(950,70,image = self.dicimages['faim25'])
             elif satiete > 0:
-                self.canvas.create_image(750,150,image = self.dicimages['faim0'])
+                self.canvas.create_image(950,70,image = self.dicimages['faim0'])
                 #mettre un message comme quoi le niveau de nourriture est bas
             else:
-                self.canvas.create_image(750,150,image = self.dicimages['empty'])
-                #mettre un message comme quoi le joueur doit manger
-            #petite fenetre qui va contenir le personnage
-            self.canvas.create_image(870, 160 , image = self.dicimages['herobox'])
-        #affichage du niveau de vie
-        for i in range (theGame().floor.hero.hp):
-            self.canvas.create_image(130+32*(i-20*(i//20)),50+40*(i//20),image = self.dicimages['health'])
-        #affichage des objets dans l'inventaire
-        place = 0
-        for e in theGame().floor.hero._inventory:
-            picture = (self.dicinventory.get(e.abbrv))
-            self.canvas.create_image(50,45+78*(place),image = picture)
-            place = place+1
-        y=650
-        
+                self.canvas.create_image(950,70,image = self.dicimages['empty'])
+                self.canvas.create_text(540,765,text='il faut manger !!!!',font="Arial 21 italic",fill="red")
+
+            experience = (theGame().floor.hero.xp)
+            percent = int(((experience)/(5+5*theGame().floor.hero.level))*100)
+            if percent >= 90:
+                self.canvas.create_image(870, 160 , image = self.dicimages['herobox90'])
+            elif percent >= 80:
+                self.canvas.create_image(870, 160 , image = self.dicimages['herobox80'])
+            elif percent >= 70:
+                self.canvas.create_image(870, 160 , image = self.dicimages['herobox70'])
+            elif percent >= 60:
+                self.canvas.create_image(870, 160 , image = self.dicimages['herobox60'])
+            elif percent >= 50:
+                self.canvas.create_image(870, 160 , image = self.dicimages['herobox50'])
+            elif percent >= 40:
+                self.canvas.create_image(870, 160 , image = self.dicimages['herobox40'])
+            elif percent >= 30:
+                self.canvas.create_image(870, 160 , image = self.dicimages['herobox30'])
+            elif percent >= 20:
+                self.canvas.create_image(870, 160 , image = self.dicimages['herobox20'])
+            elif percent >= 10:
+                self.canvas.create_image(870, 160 , image = self.dicimages['herobox10'])
+            else:
+                self.canvas.create_image(870, 160 , image = self.dicimages['herobox0'])
+            self.canvas.create_image(875, 185 , image = self.dicimages['showcase'])
+            #affichage du niveau de vie
+            for i in range (theGame().floor.hero.hp):
+                self.canvas.create_image(130+24*i - (i//26)*26*24,50+40*(i//26),image = self.dicimages['health'])
+            #affichage des objets dans l'inventaire
+            place = 0
+            for e in theGame().floor.hero._inventory:
+                picture = (self.dicinventory.get(e.abbrv))
+                self.canvas.create_image(50,45+78*(place),image = picture)
+                place = place+1
+
+            #affichage des equipements
+            self.canvas.create_image(870 , 300 , image = self.dicinventory['equipBar'])
+            for i in range(4):
+                if theGame().floor.hero.equips[i] != None:
+                    picture = self.dicimages.get(theGame().floor.hero.equips[i].abbrv)
+                    self.canvas.create_image(870 , 300+32*i , image = picture)
+        #minimap
+        y=500
         for i in self.seenmap:
             x=800
             for k in i:
@@ -1436,7 +1506,8 @@ class Game(object):
                     self.canvas.create_image(x,y,image=self.dicseen.get("dy"))
                 x+=4
             y+=4
-        y=650
+
+        y=500
         for i in self.viewablemap:
             x=800
             for k in i:
@@ -1444,13 +1515,93 @@ class Game(object):
                     self.canvas.create_image(x,y,image=self.dicviewable.get("ye"))
                 x+=4
             y+=4
-        #affichage des dialogue dans la boite de dialogue
-        self.canvas.create_image(420,710,image = self.dicimages['dialogue'])
 
+        #affichage des emotions
+        #pour la joie
+        if theGame().floor.hero.joie >= 90:
+            self.canvas.create_image(950,125,image = self.dicemotion['joy9'])
+        elif theGame().floor.hero.joie >= 80:
+            self.canvas.create_image(950,125,image = self.dicemotion['joy8'])
+        elif theGame().floor.hero.joie >= 70:
+            self.canvas.create_image(950,125,image = self.dicemotion['joy7'])
+        elif theGame().floor.hero.joie >= 60:
+            self.canvas.create_image(950,125,image = self.dicemotion['joy6'])
+        elif theGame().floor.hero.joie >= 50:
+            self.canvas.create_image(950,125,image = self.dicemotion['joy5'])
+        elif theGame().floor.hero.joie >= 40:
+            self.canvas.create_image(950,125,image = self.dicemotion['joy4'])
+        elif theGame().floor.hero.joie >= 30:
+            self.canvas.create_image(950,125,image = self.dicemotion['joy3'])
+        elif theGame().floor.hero.joie >= 20:
+            self.canvas.create_image(950,125,image = self.dicemotion['joy2'])
+        else:
+            self.canvas.create_image(950,125,image = self.dicemotion['joy1'])
+
+        if theGame().floor.hero.tristesse >= 90:
+            self.canvas.create_image(950,165,image = self.dicemotion['sad9'])
+        elif theGame().floor.hero.tristesse >= 80:
+            self.canvas.create_image(950,165,image = self.dicemotion['sad8'])
+        elif theGame().floor.hero.tristesse >= 70:
+            self.canvas.create_image(950,165,image = self.dicemotion['sad7'])
+        elif theGame().floor.hero.tristesse >= 60:
+            self.canvas.create_image(950,165,image = self.dicemotion['sad6'])
+        elif theGame().floor.hero.tristesse >= 50:
+            self.canvas.create_image(950,165,image = self.dicemotion['sad5'])
+        elif theGame().floor.hero.tristesse >= 40:
+            self.canvas.create_image(950,165,image = self.dicemotion['sad4'])
+        elif theGame().floor.hero.tristesse >= 30:
+            self.canvas.create_image(950,165,image = self.dicemotion['sad3'])
+        elif theGame().floor.hero.tristesse >= 20:
+            self.canvas.create_image(950,165,image = self.dicemotion['sad2'])
+        else:
+            self.canvas.create_image(950,165,image = self.dicemotion['sad1'])
+
+        if theGame().floor.hero.colere >= 90:
+            self.canvas.create_image(950,205,image = self.dicemotion['angry9'])
+        elif theGame().floor.hero.colere >= 80:
+            self.canvas.create_image(950,205,image = self.dicemotion['angry8'])
+        elif theGame().floor.hero.colere >= 70:
+            self.canvas.create_image(950,205,image = self.dicemotion['angry7'])
+        elif theGame().floor.hero.colere >= 60:
+            self.canvas.create_image(950,205,image = self.dicemotion['angry6'])
+        elif theGame().floor.hero.colere >= 50:
+            self.canvas.create_image(950,205,image = self.dicemotion['angry5'])
+        elif theGame().floor.hero.colere >= 40:
+            self.canvas.create_image(950,205,image = self.dicemotion['angry4'])
+        elif theGame().floor.hero.colere >= 30:
+            self.canvas.create_image(950,205,image = self.dicemotion['angry3'])
+        elif theGame().floor.hero.colere >= 20:
+            self.canvas.create_image(950,205,image = self.dicemotion['angry2'])
+        else:
+            self.canvas.create_image(950,205,image = self.dicemotion['angry1'])
+
+        if theGame().floor.hero.peur >= 90:
+            self.canvas.create_image(950,245,image = self.dicemotion['peur9'])
+        elif theGame().floor.hero.peur >= 80:
+            self.canvas.create_image(950,245,image = self.dicemotion['peur8'])
+        elif theGame().floor.hero.peur >= 70:
+            self.canvas.create_image(950,245,image = self.dicemotion['peur7'])
+        elif theGame().floor.hero.peur >= 60:
+            self.canvas.create_image(950,245,image = self.dicemotion['peur6'])
+        elif theGame().floor.hero.peur >= 50:
+            self.canvas.create_image(950,245,image = self.dicemotion['peur5'])
+        elif theGame().floor.hero.peur >= 40:
+            self.canvas.create_image(950,245,image = self.dicemotion['peur4'])
+        elif theGame().floor.hero.peur >= 30:
+            self.canvas.create_image(950,245,image = self.dicemotion['peur3'])
+        elif theGame().floor.hero.peur >= 20:
+            self.canvas.create_image(950,245,image = self.dicemotion['peur2'])
+        else:
+            self.canvas.create_image(950,245,image = self.dicemotion['peur1'])
+
+        #affichage des dialogue dans la boite de dialogue
+        self.canvas.create_image(540,740,image = self.dicimages['dialogue'])
         if last:
-            self.canvas.create_text(500,750,text=self.readMessages(),font="Arial 25 italic",fill="white")
-        #inventaire ecrit: self.canvas.create_text(500,770,text=self.floor.hero.description(),font="Arial 16 italic",fill="white")
-        #fin de la boite de dialogue
+            self.canvas.create_text(540,740,text=self.readMessages(),font="Arial 21 italic",fill="yellow")
+
+        #affichage du niveau
+        self.canvas.create_text(870,68,text=theGame().floor.hero.level,font="Arial 25 bold",fill="white")
+
         self.canvas.pack()
         self.fenetre.update()
         if theGame().floor.hero.hp<1:
@@ -1477,8 +1628,8 @@ class Game(object):
         #bouton_jouer.place(x=1500,y=800)
         self.canvas=Canvas(self.fenetre,width=1200,height=800,background="black")
         self.canvas.place(x=0,y=0)
-        #bouton_quitter = Button(self.fenetre, text='Quitter', command=self.fenetre.destroy)
-        #bouton_quitter.place(x=1200,y=800)
+        bouton_quitter = Button(self.fenetre, text='Quitter', command=self.fenetre.destroy)
+        bouton_quitter.place(x=1200,y=800)
         self.initgraph()
 
     def endgame(self) -> None:
@@ -1496,7 +1647,7 @@ class Game(object):
         while theta<=2*math.pi:
             r=0
             cv=Coord(0,0)
-            while r<=6 and (ch+cv in self.floor) and (self.floor[ch+cv] in Map.listground or self.floor[self.floor.hero]==ch+cv or (isinstance(self.floor[ch+cv],Element) and self.floor[ch+cv].transparent==True)):
+            while r<=self.hero.distvision and (ch+cv in self.floor) and (self.floor[ch+cv] in Map.listground or self.floor[self.floor.hero]==ch+cv or (isinstance(self.floor[ch+cv],Element) and self.floor[ch+cv].transparent==True)):
                 self.seenmap[(cv+ch).y][(cv+ch).x]=self.floor[cv+ch]
                 self.viewablemap[(cv+ch).y][(cv+ch).x]=str(self.floor[cv+ch])
                 r+=0.2
