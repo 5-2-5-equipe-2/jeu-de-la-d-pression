@@ -8,7 +8,7 @@ from tkinter import *
 import copy
 import math
 nomprogramme="programme8.py"
-delaianim=0.05
+delaianim=0.00
 
 def nonefunc(x=0,y=0,z=0):
     "test"
@@ -33,15 +33,16 @@ def heal(creature) -> True:
     creature.hp+=3
     return True
 
-def teleport(creature, unique : bool) -> bool:
-    "Teleports a creature from a place to another in the game's floor"
-    f=theGame().floor
-    l=len(f)
-    c=Coord(random.randint(0,l),random.randint(0,l))
-    while f[c]!=Map.empty:
-        c=f[Coord(random.randint(0,l),random.randint(0,l))]
-    f.move(creature,c-f.pos(creature))
-    return unique
+def teleport(creature:"Hero"):
+    """Teleport the creature"""
+    if creature.mp>=1:
+        creature.mp-=1
+        r = theGame().floor.randRoom()
+        c = r.randCoord()
+        while not theGame().floor.get(c) in Map.listground:
+            c = r.randCoord()
+        theGame().floor.rm(theGame().floor.pos(creature))
+        theGame().floor.put(c, creature)
 
 def eat(creature, miam,name):
     """Feed the Hero with food elements"""
@@ -323,7 +324,7 @@ class Decoration(Element):
 
 class Creature(Element):
     "Element with hps and strength, movable in a Map"
-    def __init__(self,name,hp,abbrv=None,strength=1,defense=0,inventory=[],equips=[None,None,None,None],bourse=0,vitesse=1,level=1,action=0,power=None,special=None):
+    def __init__(self,name,hp,abbrv=None,strength=1,defense=0,inventory=None,equips=[None,None,None,None],bourse=0,vitesse=1,level=1,action=0,power=None,special=None):
         Element.__init__(self,name,abbrv,transparent=True)
         self.hp=int(hp*(1.5**level))
         self.hpmax=self.hp
@@ -332,7 +333,10 @@ class Creature(Element):
         self.defense=int(defense*(1.5**level))
         self.xp=(self.hp+3*self.strength)*level
         self.bourse=bourse
-        self.inventory=inventory
+        if inventory==None:
+            self.inventory=[]
+        else:
+            self.inventory=inventory
         self.equips=equips
         self.listeffects=[]
         self.dpl=[]
@@ -357,7 +361,7 @@ class Creature(Element):
         if other.special!=None and isinstance(self,Hero):
             other.special(other)
         if self.equips[1] != None:
-            self.creature.equips[1].breakable(other)
+            self.equips[1].breakable(other)
         if self.hp<=0:
             return other.gainxp(self)
         return False
@@ -388,7 +392,7 @@ class Creature(Element):
     def take(self,equip)-> True:
         "Taking an Equipment: we add it to the Creature's inventory"
         if isinstance(equip,Equipment):
-            if  len(self.inventory)<=9:
+            if  len(self.inventory)<=(9 if isinstance(self,Hero) else 1):
                 self.inventory.append(equip)
                 return True
             return False
@@ -424,9 +428,24 @@ class Creature(Element):
         elif ((devant+self.facing) in theGame().floor) and (isinstance(theGame().floor.get(devant+self.facing), Equipment) or theGame().floor.get(devant+self.facing)==Map.empty):
             theGame().floor.put(devant,equip if equip.used=="idem" else copy.copy(equip.used))
         self.inventory.remove(equip)
+        theGame().deselect()
+        theGame().gameturn()
 
     def unhide(self,newabbrv) -> None:
         self.abbrv=newabbrv
+
+
+
+class Archer(Creature):
+    def __init__(self,name,hp, abbrv=None, strength=1, defense=0, inventory=[], equips=[None,None,None,None], bourse=0,vitesse=1,level=1,action=0,power=None,special=None):
+        Creature.__init__(self,name,hp, abbrv=None, strength=1, defense=0, inventory=[], equips=[None,None,None,None], bourse=0,vitesse=1,level=1,action=0,power=None,special=None)
+        self.action=255
+
+    def tir(self):
+        theGame().hero.hp-=2
+        theGame().addMessage(f"L'archer vous tir dessus.")
+
+
 
 class Pills(Element):
     "Pills are the game's money: we find them randomly in the game, they have a value according to their gold value."
@@ -439,6 +458,8 @@ class Pills(Element):
         theGame().addMessage(f"Tu as ramassé des médicaments")
         creature.bourse+=self.valeur_pillule
         return True
+
+
 
 class Equipment(Element):
     "Pickable and usable Element"
@@ -536,6 +557,7 @@ class Hero(Creature):
         if item.use(self):
             self.inventory.remove(item)
             theGame().deselect()
+            theGame().gameturn()
 
     def useitem(self,number):
         [self.fenetre.bind(i,self.gameturn) for i in self._actions]
@@ -679,7 +701,7 @@ class Armor(Equipment):
 
     def breakable(self,creature):
         "Show the destruction of the armor."
-        self.durabilite-=(creature.strenght)*0,3
+        self.durabilite-=(creature.strength)
         if self.durabilite<=0:
             return self.usage(creature)
 
@@ -740,7 +762,7 @@ class Coffre(Element):
                     coordaround.pop(inx-1)
             return
 
-        return theGame().addMessage("Ce coffre ne s'ouvre qu'avec une clé.")
+        return theGame().addMessage("Ce coffre ne s'ouvre qu'avec une clé..")
 
 class NPC(Creature):
     "NPC creature, can talk when met."
@@ -854,12 +876,15 @@ class Room(object):
         elif len(a)==2:
             c=self.randEmptyCoord2(map)
             for i in range(2):
-                map.put(c+Coord(0,-i),copy.copy(a[i]))
+                try:
+                    map.put(c+Coord(0,-i),copy.copy(a[i]))
+                except IndexError:
+                    pass
         if seller==True:
             map.put(random.choice(map._rooms).randEmptyCoord(map),theGame().randSeller())
 
 class SpeRoom(Room):
-    """a rectangular room in the map with pair size"""
+    "a triangular room in the map"
     def __init__(self,c1,cent,contour="+"):
         self.c1=c1
         self.c2=Coord(self.c1.x+7,self.c1.y)
@@ -932,7 +957,6 @@ class SpeRoom(Room):
 
 
 
-
 class Attack(object):
     "An attack: basically a tile with an animation"
     def __init__(self,name,abbrv=None,dmg : int=0,turns : int=1,effects : List[Status]=[]) -> None:
@@ -991,9 +1015,9 @@ class Map(object):
             room=random.choice(self._rooms)
         if coffre=="O":
             c=room.randCoord()
-            while self.get(c)!=self.ground1:
+            while self.get(c) in Map.listground:
                 c=room.randCoord()
-            self.put(c,theGame().randMonsterKey())
+            self.put(c,theGame().randMonsterKey(self))
 
     def __repr__(self) -> str:
         return "\n".join(["".join([str(self._mat[n][k]) for k in range(len(self))]) for n in range(len(self))])+"\n"
@@ -1265,72 +1289,76 @@ class Map(object):
                 i.creaturn(self)
                 if i.action>0:
                     i.action-=1
+                    if isinstance(i,Archer):
+                        if self._elem[i].distance(self._elem[self.hero])<3:
+                            Archer.tir(self)
                     pass
                 else:
-                    if self._elem[i].distance(self._elem[self.hero])<=1 or ((self._elem[i].cosinus(self._elem[self.hero]) == (1/math.sqrt(2) or -1/math.sqrt(2))) and self._elem[i].distance(self._elem[self.hero])<=math.sqrt(2)):
-                        self.hero.meet(i)
-                    elif self._elem[i].distance(self._elem[self.hero])<6:
-                        posmonstre = self.pos(i)
-                        poshero = self.pos(self.hero)
-                        new = posmonstre - poshero
-                        way1 = Coord(-sign(new.x),-sign(new.y))
-                        #diagonale 'imparfaite'
-                        if ((way1.x and way1.y) != 0) and (self._elem[i].cosinus(self._elem[self.hero]) != (1/math.sqrt(2) or -1/math.sqrt(2))):
-                            way2 = self._elem[i].direction(self._elem[self.hero])
-                            #creation de way3 et way4
-                            if way2.y ==0:
-                                way3 = Coord(way2.x,-way1.y)
-                                way4 = Coord(0,way1.y)
-                            else:
-                                way3 = Coord(-way1.x, way2.y)
-                                way4 = Coord(way1.x , 0)
-                            way5 = 0
-                        #diagonales 'parfaites'
-                        elif (way1.x and way1.y) != 0 :
-                            #creation de way2, way3, way4, way5
-                            way2 = Coord(0,way1.y)
-                            way3 = Coord(way1.x,0)
-                            way4 = Coord(way1.x,-way1.y)
-                            way5 = Coord(-way1.x,way1.y)
+                    for _ in range (i.vitesse):
+                        if self._elem[i].distance(self._elem[self.hero])<=1 or ((self._elem[i].cosinus(self._elem[self.hero]) == (1/math.sqrt(2) or -1/math.sqrt(2))) and self._elem[i].distance(self._elem[self.hero])<=math.sqrt(2)):
+                            self.hero.meet(i)
+                        elif self._elem[i].distance(self._elem[self.hero])<6:
+                            posmonstre = self.pos(i)
+                            poshero = self.pos(self.hero)
+                            new = posmonstre - poshero
+                            way1 = Coord(-sign(new.x),-sign(new.y))
+                            #diagonale 'imparfaite'
+                            if ((way1.x and way1.y) != 0) and (self._elem[i].cosinus(self._elem[self.hero]) != (1/math.sqrt(2) or -1/math.sqrt(2))):
+                                way2 = self._elem[i].direction(self._elem[self.hero])
+                                #creation de way3 et way4
+                                if way2.y ==0:
+                                    way3 = Coord(way2.x,-way1.y)
+                                    way4 = Coord(0,way1.y)
+                                else:
+                                    way3 = Coord(-way1.x, way2.y)
+                                    way4 = Coord(way1.x , 0)
+                                way5 = 0
+                            #diagonales 'parfaites'
+                            elif (way1.x and way1.y) != 0 :
+                                #creation de way2, way3, way4, way5
+                                way2 = Coord(0,way1.y)
+                                way3 = Coord(way1.x,0)
+                                way4 = Coord(way1.x,-way1.y)
+                                way5 = Coord(-way1.x,way1.y)
 
-                        #cas ou le monstre doit se deplacer en ligne droite
-                        else :
-                            if way1.x ==0:
-                                way2 = Coord(1,way1.y)
-                                way3 = Coord(-1,way1.y)
-                                way4 = Coord(1,0)
-                                way5 = Coord(-1,0)
-                            else:
-                                way2 = Coord(way1.x,1)
-                                way3 = Coord(way1.x,-1)
-                                way4 = Coord(0,1)
-                                way5 = Coord(0,-1)
+                            #cas ou le monstre doit se deplacer en ligne droite
+                            else :
+                                if way1.x ==0:
+                                    way2 = Coord(1,way1.y)
+                                    way3 = Coord(-1,way1.y)
+                                    way4 = Coord(1,0)
+                                    way5 = Coord(-1,0)
+                                else:
+                                    way2 = Coord(way1.x,1)
+                                    way3 = Coord(way1.x,-1)
+                                    way4 = Coord(0,1)
+                                    way5 = Coord(0,-1)
 
-                        #cas ou il n'y a aucun obstacle devant la premiere direction (on privilegie le deplacement en diagonale)
-                        if (self._elem[i]+way1) in self and (self.get(self._elem[i]+way1) in self.listground or self.get(self._elem[i]+way1) in self.listgroundwet) or isinstance(self.get(self._elem[i]+way1),Used) :
-                            self.move(i,way1)
+                            #cas ou il n'y a aucun obstacle devant la premiere direction (on privilegie le deplacement en diagonale)
+                            if (self._elem[i]+way1) in self and (self.get(self._elem[i]+way1) in self.listground or self.get(self._elem[i]+way1) in self.listgroundwet) or isinstance(self.get(self._elem[i]+way1),Used) :
+                                self.move(i,way1)
 
-                        #cas ou il y a un obstacle devant la premiere direction possible, on choisi donc la deuxieme direction possible
-                        elif (self._elem[i]+way2) in self and (self.get(self._elem[i]+way2) in self.listground or self.get(self._elem[i]+way2) in self.listgroundwet) or isinstance(self.get(self._elem[i]+way2),Used) :
-                            self.move(i,way2)
+                            #cas ou il y a un obstacle devant la premiere direction possible, on choisi donc la deuxieme direction possible
+                            elif (self._elem[i]+way2) in self and (self.get(self._elem[i]+way2) in self.listground or self.get(self._elem[i]+way2) in self.listgroundwet) or isinstance(self.get(self._elem[i]+way2),Used) :
+                                self.move(i,way2)
 
-                        #cas ou il y a un obstacle devant la premiere et deuxieme direction possible, on choisi donc la troisieme direction possible
-                        elif (self._elem[i]+way3) in self and (self.get(self._elem[i]+way3) in self.listground or self.get(self._elem[i]+way3) in self.listgroundwet ) or isinstance(self.get(self._elem[i]+way3),Used) :
-                            self.move(i,way3)
+                            #cas ou il y a un obstacle devant la premiere et deuxieme direction possible, on choisi donc la troisieme direction possible
+                            elif (self._elem[i]+way3) in self and (self.get(self._elem[i]+way3) in self.listground or self.get(self._elem[i]+way3) in self.listgroundwet ) or isinstance(self.get(self._elem[i]+way3),Used) :
+                                self.move(i,way3)
 
-                        #cas ou il y a un obstacle devant la premiere, deuxieme et troisieme direction possible, on choisi donc la quatrieme direction possible
-                        elif (self._elem[i]+way4) in self and (self.get(self._elem[i]+way4) in self.listground or self.get(self._elem[i]+way4) in self.listgroundwet)or isinstance(self.get(self._elem[i]+way4),Used) :
-                            self.move(i,way4)
+                            #cas ou il y a un obstacle devant la premiere, deuxieme et troisieme direction possible, on choisi donc la quatrieme direction possible
+                            elif (self._elem[i]+way4) in self and (self.get(self._elem[i]+way4) in self.listground or self.get(self._elem[i]+way4) in self.listgroundwet)or isinstance(self.get(self._elem[i]+way4),Used) :
+                                self.move(i,way4)
 
-                        #cas ou il y a un obstacle devant la premiere, deuxieme ,troisieme et quatrieme direction possible, on choisi donc la cinquieme direction possible
-                        elif ((self._elem[i]+way5) in self and (self.get(self._elem[i]+way5) in self.listground or self.get(self._elem[i]+way5) in self.listgroundwet )  or isinstance(self.get(self._elem[i]+way5),Used)) and isinstance(way5,Coord) :
-                            self.move(i,way5)
+                            #cas ou il y a un obstacle devant la premiere, deuxieme ,troisieme et quatrieme direction possible, on choisi donc la cinquieme direction possible
+                            elif ((self._elem[i]+way5) in self and (self.get(self._elem[i]+way5) in self.listground or self.get(self._elem[i]+way5) in self.listgroundwet )  or isinstance(self.get(self._elem[i]+way5),Used)) and isinstance(way5,Coord) :
+                                self.move(i,way5)
 
-                    '''else: #si le monstre est trop loin du hero, il a 25%  de chance de faire un deplacement completement aleatoire)
-                        if random.randint(0,3)==0:
-                            rdway = Coord(random.randint(-1,1),random.randint(-1,1))
-                            if ((self._elem[i]+rdway) in self and (self.get(self._elem[i]+rdway) in self.listground or self.get(self._elem[i]+rdway) in self.listgroundwet )  or isinstance(self.get(self._elem[i]+rdway),Used)):
-                                self.move(i,rdway)'''
+                        '''else: #si le monstre est trop loin du hero, il a 25%  de chance de faire un deplacement completement aleatoire)
+                            if random.randint(0,3)==0:
+                                rdway = Coord(random.randint(-1,1),random.randint(-1,1))
+                                if ((self._elem[i]+rdway) in self and (self.get(self._elem[i]+rdway) in self.listground or self.get(self._elem[i]+rdway) in self.listgroundwet )  or isinstance(self.get(self._elem[i]+rdway),Used)):
+                                    self.move(i,rdway)'''
 
     def checkCoord(self,coord) -> None:
         "Method to check if an object is a Coord in the Map. Raises errors."
@@ -1378,6 +1406,8 @@ class Special_ground(object):
                 creature.tristesse+=5
                 theGame().addMessage(f"ATTENTION ! {creature.name} glisse sur le sol mouillé.")
 
+
+
 class Stairs(Special_ground):
     "Stairs allowing the Hero to change the stage he plays in."
     def __init__(self,name,abbrv="#",effect=True,up=False):
@@ -1421,23 +1451,26 @@ class Game(object):
               "p" : lambda hero : theGame().floor.attackpoison(theGame().floor.pos(theGame().hero)),
               "f" : lambda hero : theGame().floor.attackfire(theGame().floor.pos(hero),hero.facing),
               "k" : lambda hero : hero.kill(),
+              "o" : lambda hero: teleport(hero),
               "<space>" : lambda hero : theGame().tour(),
               "u" : lambda hero : theGame().select(hero.inventory),
               "j" : lambda hero : hero.throw(theGame().select(hero.inventory))}
-    monsters = { 0: [ Creature("Sad emotivo",4,"G"), Creature("Fear emotivo",2,"W") ],
+    monsters = { 0: [ Creature("Sad emotivo",4,"G"), Creature("Fear emotivo",2,"W",vitesse=2) ],
                  1: [ Creature("Angry emotivo",6,"O",strength=2),
                       Creature("Ourson",10,"B"),
                       Creature("Araignée",2,"Ar",strength=0,power=Status("Poison",5,-1)),
-                      Creature("Fantome",4,"fi",special=lambda creature: creature.unhide("fv"))],
+                      Creature("Fantome",4,"fi",special=lambda creature: creature.unhide("fv")),Archer("Tireur",4,"T")],
+                 3: [NPC("docteur",abbrv="docM", strength=0, defense=0,actif=["Tes parents t’attendent en bas. Fait attention le ménage a peut etre été fait le sol peut etre glissant"]),NPC("docteur",abbrv="docF", strength=0, defense=0,actif=["Si tu as une quelconque question, appuie sur <i> tu auras surement ta réponse."]),NPC("infiermiere",abbrv="inf", strength=0, defense=0,actif=["Si tu as une quelconque question, appuie sur <i> tu auras surement ta réponse.Wow tu deviens un grand tu sais. Mon conseil : ne fuit pas trop tes émotions ! Tu as de grandes poches ! Tu peux utiliser les objets dedans en appuyant sur <U>."])],
                  5: [ Creature("Boulimie",20,strength=3)]}
     equipments = { 0: [ Weapon("épée",3,37,"s",f=True),Equipment("gum","g", usage=lambda creature: jet(True),used=Used("used chewing-gum","u")) ,Equipment("potion","!",usage=lambda creature : heal(creature),f=True), Pills("or1","b",valeur_pillule=1), Equipment("sucette baveuse","s3",usage=lambda creature : eat(creature,1,"sucette baveuse"),f=True)],
                    1: [ Equipment("lance-pierre","a", usage=lambda creature: tir(False)),Equipment("potion","!",usage= lambda creature : teleport(creature,True),f=True) ,Pills("or2","j",valeur_pillule=2),Equipment("sucette croquée","s2",usage=lambda creature : eat(creature,3,"sucette croquée"),f=True)],
                    2: [ Armor("plaid",5,5,"pl"), Pills("or5","p",valeur_pillule=5),Equipment("sucette","s1",usage=lambda creature : eat(creature,7,"sucette"),f=True), Equipment("cookie choco","cc",usage=lambda creature : eat(creature,8,"cookie choco")),Equipment("happy pills","HP",usage=lambda creature : eat(creature,10,"HP"))],
-                   3: [ Pills("or10","J", valeur_pillule=10) ,Amulet("carte de docteur",defense=5,force=5,courage=5,abbrv="Cd")]}
+                   3: [ Pills("or10","J", valeur_pillule=10) ,Amulet("carte de docteur",defense=5,force=5,courage=5,abbrv="Cd") ,Amulet("foulard",defense=10,force=2,courage=15,abbrv="foulard"), Armor("plaid",5,5,"pl")]}
     marchande =  { 0: [ Weapon("épée",3,37,"s",f=True),Equipment("gum","g", usage=lambda creature: jet(True),used=Used("used chewing-gum","u")) ,Equipment("potion","!",usage=lambda creature : heal(creature),f=True)],
                    1: [ Equipment("lance-pierre","a", usage=lambda creature: tir(False)),Equipment("potion","!",usage= lambda creature : teleport(creature,True),f=True), Equipment("cookie choco","cc",usage=lambda creature : eat(creature,8,"cookie choco")),Equipment("sucette","s3",usage=lambda creature : eat(creature,7,"sucette"))],
                    2: [ Armor("plaid",5,5,"pl")]}
     decorations = { 0:[[Decoration("lit","Be2",True),Decoration("lit","Be1",True)],[Decoration("fauteuil","Fa",True)],[Decoration("pot","Po",True)]]}
+
     directions=[Coord(0,1),Coord(1,1),Coord(1,0),Coord(1,-1),Coord(0,-1),Coord(-1,-1),Coord(-1,0),Coord(-1,1)]
     def __init__(self,hero=None,sizemap=20,stage=10,fl=None):
         self.hero=Hero()
@@ -1495,6 +1528,14 @@ class Game(object):
         "Returns a random Creature using randElement"
         return self.randElement(self.monsters)
 
+    def randMonsterKey(self,map):
+        """Returns a random monsterkey."""
+        monster=self.randMonster()
+        r=random.choice(map._rooms)
+        c=r.randEmptyCoord(map)
+        monster.inventory.append(Equipment("cle","cle",used="idem"))
+        map.put(c, monster)
+
     def randDecoration(self) -> List[Decoration]:
         "Returns a random Equipment using randElement"
         return self.randElement(self.decorations)
@@ -1502,13 +1543,17 @@ class Game(object):
     def randSeller(self):
         return Seller()
 
-    def select(self,l : List[Equipment]):
+    def select(self,l : List[Equipment],jeter=False):
         '''Prints the inventory and uses getch to choose which Equipment to use.
         Not in the graphical interface yet'''
         for i in l:
-            self.buttons.append(Button(self.fenetre, text=i.name, bg='steel blue', fg='cyan',font=('Comic Sans MS',10) , command=lambda : theGame().hero.use(i)))
+            if jeter:
+                self.buttons.append(Button(self.fenetre, text=i.name, bg='steel blue', fg='cyan',font=('Comic Sans MS',10) , command= lambda z = i : theGame().hero.throw(z)))
+            else:
+                self.buttons.append(Button(self.fenetre, text=i.name, bg='steel blue', fg='cyan',font=('Comic Sans MS',10) , command= lambda z = i : theGame().hero.use(z)))
         for j in range (len(self.buttons)):
             self.buttons[j].place(x = 355,y = 38+79*j)
+
 
     def deselect(self):
         '''Erase inventory buttons'''
@@ -1516,12 +1561,6 @@ class Game(object):
         for i in self.buttons:
             i.destroy()
         self.buttons=[]
-
-    def randMonsterKey(self):
-        """Returns a random monsterkey."""
-        monster=self.randElement(Game.monsters)
-        monster.objet=Equipment("key","k")
-        return monster
 
     def initgraph(self)-> None:
         "Creates the dictionary of images,and binds actions to the Tk window, then creates the mainloop."
@@ -1583,6 +1622,7 @@ class Game(object):
         plaid3_img=PhotoImage(file=imgPATH+"plaid3.png").zoom(2)
 
         boul_img=PhotoImage(file=imgPATH+"boulimie.png").zoom(2)
+        tireur_img=PhotoImage(file=imgPATH+"archer.png").zoom(2)
         sad_img=PhotoImage(file=imgPATH+"tristesse.png").zoom(2)
         fear_img=PhotoImage(file=imgPATH+"fear.png").zoom(2)
         colere_img=PhotoImage(file=imgPATH+"colere.png").zoom(2)
@@ -1604,6 +1644,10 @@ class Game(object):
         beddown=PhotoImage(file=imgPATH+"lit_vert_bas_final.png").zoom(2)
         wheelchair=PhotoImage(file=imgPATH+"fauteuil.png").zoom(2)
         flowerpot=PhotoImage(file=imgPATH+"arbuste.png").zoom(2)
+        docteurM_img=PhotoImage(file=imgPATH+"medecin1.png").zoom(2)
+        docteurF_img=PhotoImage(file=imgPATH+"medecin2.png").zoom(2)
+        infirmiere1_img=PhotoImage(file=imgPATH+"infirmiere1.png").zoom(2)
+
 
         badgemedecin_img=PhotoImage(file=imgPATH+"badgemedecin.png")
 
@@ -1699,13 +1743,15 @@ class Game(object):
         gameover_img=PhotoImage(file=imgPATH+"gameover.png")
         marchandepage_img=PhotoImage(file=imgPATH+"marchandepage.png")
 
-        self.dicimages={"C":coffre_img,"cle":cle_img,"mul":multi_img,"G" : sad_img,"W":fear_img,"O":colere_img,"B":ted_img,"D":boul_img,"Ar":ar_img, 'magic':magic,'showcase': hero_fi.zoom(3),"." : sol_img1,"," : sol_img2,"`" : sol_img3,"´" : sol_img4,".m" :wetsol_img1 , ",m" : wetsol_img2, "`m" : wetsol_img3,"´m" : wetsol_img4, "@" : [hero_fi,hero_bi,hero_li,hero_ri],"@*": [hero_tf,hero_tb,hero_tl,hero_tr],"!" : pot_img3,"D":ted_img, "fv":ghost_img ,"s":bequille_img, "a" : img_stonelance, "!":pot_img1, "c":pot_img3, "b":or1_img, "j":or2_img, "p":or5_img, "P":or10_img ,"M":marchand_f ,'inventory':hotbar , 'faim100' : faim100 , 'faim75' : faim75 , 'faim50' : faim50 , 'faim25' : faim25 , 'faim0': faim0, 'empty' : vide , 'health' : vie,'dialogue' : dialoguebox.zoom(5), ">" : esc_up, "<" : esc_down ,"u":chew_img ,"g":gum_img ,"Be1":bedup ,"Be2":beddown ,"Fa":wheelchair ,"Po":flowerpot ,"s1":sucette1_img , "s2":sucette2_img , "s3":sucette3_img , 'herobox0':herobox0 , 'herobox10':herobox10 , 'herobox20':herobox20, 'herobox30':herobox30, 'herobox40':herobox40 ,'herobox50':herobox50 ,'herobox60':herobox60 ,'herobox70':herobox70 ,'herobox80':herobox80 ,'herobox90':herobox90 , 'cc':cookie_img, "HP":happypills_img,"pl":plaid3_img}
+        self.dicimages={"C":coffre_img,"cle":cle_img,"mul":multi_img,"G" : sad_img,"W":fear_img,"O":colere_img,"B":ted_img,"D":boul_img,"Ar":ar_img, 'magic':magic,'showcase': hero_fi.zoom(3),"." : sol_img1,"," : sol_img2,"`" : sol_img3,"´" : sol_img4,".m" :wetsol_img1 , ",m" : wetsol_img2, "`m" : wetsol_img3,"´m" : wetsol_img4, "@" : [hero_fi,hero_bi,hero_li,hero_ri],"@*": [hero_tf,hero_tb,hero_tl,hero_tr],"!" : pot_img3,"D":ted_img, "fv":ghost_img ,"s":bequille_img, "a" : img_stonelance, "!":pot_img1, "c":pot_img3, "b":or1_img, "j":or2_img, "p":or5_img, "P":or10_img ,"M":marchand_f ,'inventory':hotbar , 'faim100' : faim100 , 'faim75' : faim75 , 'faim50' : faim50 , 'faim25' : faim25 , 'faim0': faim0, 'empty' : vide , 'health' : vie,'dialogue' : dialoguebox.zoom(5), ">" : esc_up, "<" : esc_down ,"u":chew_img ,"g":gum_img ,"Be1":bedup ,"Be2":beddown ,"Fa":wheelchair ,"Po":flowerpot ,"s1":sucette1_img , "s2":sucette2_img , "s3":sucette3_img , 'herobox0':herobox0 , 'herobox10':herobox10 , 'herobox20':herobox20, 'herobox30':herobox30, 'herobox40':herobox40 ,'herobox50':herobox50 ,'herobox60':herobox60 ,'herobox70':herobox70 ,'herobox80':herobox80 ,'herobox90':herobox90 , 'cc':cookie_img, "HP":happypills_img, "pl":plaid3_img, "T":tireur_img,'foulard' : foulard_img,"docM":docteurM_img,"docF":docteurF_img,"inf":infirmiere1_img}
         self.dicanim={"@":[hero_fw1,hero_bw1,hero_lw1,hero_rw1,hero_fw2,hero_bw2,hero_lw2,hero_rw2],"@*":[ hero_tf,hero_tf,hero_tf, hero_tr,hero_tr,hero_tr, hero_tb,hero_tb,hero_tb, hero_tl,hero_tl,hero_tl]}
 
-        self.dicequipement = {"s":equip_bequille ,"Cd":badgemedecin_img , 'abbrevation foulard' : foulard_img}
+        self.dicappear={"hero_foulard":hero_f.zoom(3) ,"hero_badge":hero_c.zoom(3) , "hero_plaid":hero_p1.zoom(3), "hero_foulardplaid":hero_fp1.zoom(3) ,"hero_badgeplaid":hero_cp1.zoom(3)}
+
+        self.dicequipement = {"s":equip_bequille ,"Cd":badgemedecin_img , 'foulard' : foulard_img,"pl":plaid3_img}
 
         #dictionnaire pour avoir les images en zoom dans l'inventaire
-        self.dicinventory={"equipBar":equipBar,"@" : hero_fi ,"!" : pot_img3 , "a" : img_stonelance ,"s":bequille_img ,"!":pot_img1 ,"c":pot_img3 ,"b":or1_img ,"j":or2_img ,"p":or5_img ,"P":or10_img ,"g":gum_img ,"s1":sucette1_img.zoom(2) ,"s2":sucette2_img.zoom(2) ,"s3":sucette3_img.zoom(2) , "Cd":badgemedecin_img.zoom(2), 'cc':cookie_img.zoom(2), 'bourse':bourse,"HP":happypills_img.zoom(2)}
+        self.dicinventory={"equipBar":equipBar,"@" : hero_fi ,"!" : pot_img3 , "a" : img_stonelance ,"s":bequille_img ,"!":pot_img1 ,"c":pot_img3 ,"b":or1_img ,"j":or2_img ,"p":or5_img ,"P":or10_img ,"g":gum_img ,"s1":sucette1_img.zoom(2) ,"s2":sucette2_img.zoom(2) ,"s3":sucette3_img.zoom(2) , "Cd":badgemedecin_img.zoom(2), 'cc':cookie_img.zoom(2), 'bourse':bourse,"HP":happypills_img.zoom(2),"pl":plaid3_img,"cle":cle_img}
 
         self.dicinventoryM={"!" : pot_img3.zoom(2) , "a" : img_stonelance.zoom(2) ,"s":bequille_img.zoom(2) ,"!":pot_img1.zoom(2) ,"g":gum_img.zoom(2) ,"s1":sucette1_img.zoom(4) ,"s2":sucette2_img.zoom(4) ,"s3":sucette3_img.zoom(4) , "Cd":badgemedecin_img.zoom(4), 'cc':cookie_img.zoom(4), 'bourse':bourse,"HP":happypills_img.zoom(4)}
         self.dicseen={"dy":dyel,"do":dora,"dl":dlig,"db":dblu,"dg":dgre,"dr":dred}
@@ -1742,14 +1788,14 @@ class Game(object):
             sleep(delaianim)
         [self.fenetre.bind(i,self.gameturn) for i in self._actions]
 
-    def callseller(self,seller):
+def callseller(self,seller):
         self.canvas.create_image(400 , 500 , image = self.dicother['black'])
-        self.canvas.create_image(500 , 350 , image = self.dicother['marchandepage'])
+        self.canvas.create_image(400 , 500 , image = self.dicother['marchandepage'])
         place=0
         for i in range(len(seller.chariot)):
             picture = (self.dicinventoryM.get(seller.chariot[i].abbrv))
-            self.canvas.create_image(350+150*place,425,image = picture)
-            self.canvas.create_text(350+150*place,500,text = seller.chariot[i].name)
+            self.canvas.create_image(300+150*place,590,image = picture)
+            self.canvas.create_text(300+100*place,540,text = seller.chariot[i].name)
             place = place+1
         self.fenetre.bind(i-1,seller.achat(copy.copy(seller.chariot[i])))
         self.canvas.pack()
@@ -1872,15 +1918,15 @@ class Game(object):
 
             #affichage du hero avec les equipements
             if (plaid and badge) == True:
-                self.canvas.create_image(875, 185 , image = self.dicappear['hcp1'])
+                self.canvas.create_image(875, 185 , image = self.dicappear['hero_badgeplaid'])
             elif (plaid and foulard) == True:
-                self.canvas.create_image(875, 185 , image = self.dicappear['hfp1'])
+                self.canvas.create_image(875, 185 , image = self.dicappear['hero_foulardplaid'])
             elif plaid == True:
-                self.canvas.create_image(875, 185 , image = self.dicappear['hp1'])
+                self.canvas.create_image(875, 185 , image = self.dicappear['hero_plaid'])
             elif badge == True:
-                self.canvas.create_image(875, 185 , image = self.dicappear['hc1'])
+                self.canvas.create_image(875, 185 , image = self.dicappear['hero_badge'])
             elif foulard == True:
-                self.canvas.create_image(875, 185 , image = self.dicappear['hf1'])
+                self.canvas.create_image(875, 185 , image = self.dicappear['hero_foulard'])
             else:
                 self.canvas.create_image(875, 185 , image = self.dicimages['showcase'])
 
