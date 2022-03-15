@@ -2,4 +2,4 @@
 
 
 ######
-REDIRECTED TO (Ekter/python)[https://github.com/Ekter/python]
+REDIRECTED TO [Ekter/python](https://github.com/Ekter/python)
